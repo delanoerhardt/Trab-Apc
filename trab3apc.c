@@ -1204,15 +1204,13 @@ void startGame(map *mapa, ptr_vampire player, screen *tela, keyboard *teclado)
 	/* Inicia o mapa */
 	if(!exitsValidMap()) {
 		startMap(mapa);
+		addVampToMap(*player, mapa);
 		populateMap(mapa);
-		saveMap(mapa);
-	}
-	else {
+	} else {
+		startMap(mapa);
 		readMap(mapa);
+		addVampToMap(*player, mapa);
 	}
-
-	addVampToMap(*(player), mapa);
-
 
 	keyboard tecladoPadrao = {
 	.keys = {	{ESC, '[', CUP},
@@ -1854,11 +1852,10 @@ void startMap(map *mapa)
 	mapa->turnsWithFew = 0;
 	mapa->_usablesAmount = 0;
 	mapa->_entitiesAmount = 0;
-	mapa->mapTiles = malloc((mapa->width * mapa->height) * 2);
 
 	vampire nullVamp = {};
 
-	int i = 0, j = 0;
+	int i = 0;
 	for(;i < ENTITYLISTSIZE;i++) {
 		mapa->entities[i] = nullVamp;
 	}
@@ -1866,17 +1863,6 @@ void startMap(map *mapa)
 	usable nullItem = {};
 	for(i = 0;i < ITEMLISTSIZE;i++) {
 		mapa->itemsList[i] = nullItem;
-	}
-
-	for(i = 0;i < 2;i++) {
-		for(j = 0;j < mapa->width;j++) {
-			(mapa->mapTiles)[(i * (mapa->height - 1) * mapa->width) + j] = (WALLTILE | 0xff00);
-		}
-	}
-	for(j = 0; j < 2;j++) {
-		for(i = 1; i < mapa->height - 1;i++) {
-			(mapa->mapTiles)[i * mapa->width + (j * (mapa->width - 1))] = (WALLTILE | 0xff00);
-		}
 	}
 
 	for(i = 0;i < 8;i++)
@@ -1925,9 +1911,22 @@ void populateMap(map *mapa)
 	sprintf(fileName, "logs/log%d.txt", runNumber);
 	FILE *log = fopen(fileName, "w");
 
-	fprintf(log, "0\n");
+	mapa->mapTiles = malloc((mapa->width * mapa->height) * 2);
+
 	int i = 1, j = 1, k = 0;
-	for(;i < mapa->height - 1; i++) {
+	for(i = 0;i < 2;i++) {
+		for(j = 0;j < mapa->width;j++) {
+			(mapa->mapTiles)[(i * (mapa->height - 1) * mapa->width) + j] = (WALLTILE | 0xff00);
+		}
+	}
+	for(j = 0; j < 2;j++) {
+		for(i = 1; i < mapa->height - 1;i++) {
+			(mapa->mapTiles)[i * mapa->width + (j * (mapa->width - 1))] = (WALLTILE | 0xff00);
+		}
+	}
+
+	fprintf(log, "0\n");
+	for(i = 0;i < mapa->height - 1; i++) {
 		for(j = 1;j < mapa->width - 1; j++) {
 			(mapa->mapTiles)[i * mapa->width + j] = (WALLTILE | 0x0080);
 		}
@@ -2409,7 +2408,6 @@ void readMap(map *mapa)
 	getchar();
 
 	fclose(mapFile);
-
 }
 
 void saveMap(map *mapa)
