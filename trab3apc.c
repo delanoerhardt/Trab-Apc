@@ -77,7 +77,7 @@
 
 #define KEYSAMOUNT 8
 #define MAXLINESONMENU 10
-#define MENUSAMOUNT 10
+#define MENUSAMOUNT 11
 
 #define MAXPAGES 5
 
@@ -439,7 +439,7 @@ void drawScreen(screen* tela, map *mapa, int mode, int *configFlags);
 
 void showScreen(screen *tela);
 
-void updateOffsets(map *mapa, screen *tela);
+void updateOffsets(map *mapa, screen *tela, int vampireToCenter);
 
 int drawLine(screen *tela, int x, int y, char *string);
 
@@ -569,7 +569,7 @@ int main()
 	{
 		if(changed)
 		{
-			updateOffsets(&mapa, &tela);
+			updateOffsets(&mapa, &tela, mode == WATCHING ? ENTITYLISTSIZE - 2 : 0);
 
 			tela.menuList[1].lineState[0] = mapa.entities[0].itemsListIDS[1] == -1 ? 0 : 1;
 			tela.menuList[1].lineState[1] = mapa.entities[0].itemsListIDS[2] == -1 ? 0 : 1;
@@ -606,12 +606,12 @@ int main()
 					mode = BATTLING;
 					playerMoved = 0;
 					changeMenuState(&tela, 2);
-					putchar('\n');
 					continue;
 				}
 			}
 		} else
 			dontCheckBattleFor--;
+
 
 		if(getInput)
 			option = readKeyPress(teclado);
@@ -620,7 +620,6 @@ int main()
 			lives = 1;
 			continue;
 		}
-
 
 		switch(mode)
 		{
@@ -753,8 +752,8 @@ int main()
 							if(read >= MINSCREENWIDTH && read < 1000) {
 								tela.width = read;
 								option++;
-							}
 							putchar('\n');
+							}
 						} else if(option == 1) {
 							printf("Escreva a altura da tela (>=%d):", MINSCREENHEIGHT);
 							read = readInt();
@@ -933,10 +932,19 @@ int main()
 					break;
 				} else if(option == 0) {
 					dropItem(&mapa, &(mapa.entities[0]), 1, 1);
+					mode = MOVINMAP;
+					resetMenuValues(&tela, 1);
+					changeMenuState(&tela, 0);
 				} else if(option == 1) {
 					dropItem(&mapa, &(mapa.entities[0]), 2, 1);
+					mode = MOVINMAP;
+					resetMenuValues(&tela, 1);
+					changeMenuState(&tela, 0);
 				} else if(option == 2) {
 					dropItem(&mapa, &(mapa.entities[0]), 0, 1);
+					mode = MOVINMAP;
+					resetMenuValues(&tela, 1);
+					changeMenuState(&tela, 0);
 				} else if(option == 3) {
 					changeMenuState(&tela, 4);
 					mapa.entities[ENTITYLISTSIZE - 1] = mapa.entities[0];
@@ -945,14 +953,10 @@ int main()
 					putchar('\n');
 					break;
 				} else if(option == 4) {
+					mapa.entities[ENTITYLISTSIZE - 2] = mapa.entities[0];
 					changeMenuState(&tela, 10);
 					mode = WATCHING;
-
 				}
-
-				mode = MOVINMAP;
-				resetMenuValues(&tela, 1);
-				changeMenuState(&tela, 0);
 			}
 			break;
 
@@ -1208,8 +1212,8 @@ void startGame(map *mapa, ptr_vampire player, screen *tela, keyboard *teclado)
 		populateMap(mapa);
 	} else {
 		startMap(mapa);
-		readMap(mapa);
 		addVampToMap(*player, mapa);
+		readMap(mapa);
 	}
 
 	keyboard tecladoPadrao = {
@@ -2397,6 +2401,19 @@ void readMap(map *mapa)
 			mapa->mapTiles[i] = c;
 			i++;
 		}
+		fgetc(mapFile);
+		fscanf(mapFile, " %d %d", &(mapa->entities[0].x), &(mapa->entities[0].y) );
+		fscanf(mapFile, " %d", &i);
+		int j = 0;
+		for(;j < i;j++) {
+			mapa->entities[ENTITYLISTSIZE - 3].vampireType = 0;
+			mapa->entities[ENTITYLISTSIZE - 3].named = 0;
+			startVampire(&(mapa->entities[ENTITYLISTSIZE - 3]));
+			mapa->entities[ENTITYLISTSIZE - 3].alive = 1;
+
+			fscanf(mapFile, " %d %d %d", &(mapa->entities[ENTITYLISTSIZE - 3].x), &(mapa->entities[ENTITYLISTSIZE - 3].y), &(mapa->entities[ENTITYLISTSIZE - 3].level));
+			addVampToMap(mapa->entities[ENTITYLISTSIZE - 3], mapa);
+		}		
 	}
 	int i = 0, j = 0;
 	for(;i < mapa->height;i++) {
@@ -2916,7 +2933,19 @@ void clearScreen(screen *tela)
 	menu->x = tela->columnWidth + 1 + ( (tela->mapWidth - menu->width) / 2);
 	menu->y = (tela->shownHeight - menu->height - 2) / 2;
 
-
+	menu = &(tela->menuList[10]);
+	menu->state = 0;
+	menu->x = -2;
+	menu->y = 1;
+	menu->width = 0;
+	menu->lineOffset = 0;
+	menu->curLine = 0;
+	menu->changeState[0] = -2;
+	menu->maxLine = 0;
+	setArrow(menu, "");
+	addLine(menu, "Setas para mover");
+	addLine(menu, "Voltar para o jogo");
+	menu->height = menu->maxLine;
 
 	tela->helpScroll.state = 1;
 	tela->helpScroll.width = tela->mapWidth - 6;
@@ -2950,7 +2979,7 @@ void drawScreen(screen* tela, map *mapa, int mode, int *configFlags)
 		}
 	}
 
-	if(mode == MOVINMAP || mode == MAPMENU || mode == BATTLING)
+	if(mode == MOVINMAP || mode == MAPMENU || mode == BATTLING || mode == WATCHING)
 		yLeft = printVampireAt(tela, 1, yLeft, tela->columnWidth, mapa->entities[0], 1);
 
 	if(mode == BATTLING) {
@@ -2978,13 +3007,23 @@ void drawScreen(screen* tela, map *mapa, int mode, int *configFlags)
 		}
 	}
 
-	if(mode == MOVINMAP || mode == MAPMENU || mode == BATTLING)
+	if(mode == MOVINMAP || mode == MAPMENU || mode == BATTLING || mode == WATCHING)
 	{
 		char c;
 		for(j = 0; j < tela->shownHeight - 2;j++)
 		{
 			for(i = 0;i < tela->mapWidth;i++)
 			{
+				if(i >= mapa->width) {
+					tela->screenPixels[(j + 1) * tela->shownWidth + i + tela->columnWidth + 2] = ' ';
+					continue;
+				}
+
+				if(j >= mapa->height) {
+					tela->screenPixels[(j + 1) * tela->shownWidth + i + tela->columnWidth + 2] = ' ';
+					continue;
+				}
+
 				c = mapa->mapTiles[(j + mapa->offsetTop) * mapa->width + i + mapa->offsetRight];
 
 				if(!(c & 0x80))
@@ -3013,6 +3052,9 @@ void drawScreen(screen* tela, map *mapa, int mode, int *configFlags)
 					tela->screenPixels[(_vamp->y + 1 - mapa->offsetTop) * tela->shownWidth + (_vamp->x + tela->columnWidth + 2 - mapa->offsetRight)] = _vamp->alive == 0 ? 'M' : _vamp->vampireType == 0 ? 'V' : _vamp->vampireType == 1 ? '@' : 'D';
 			}
 		}
+
+		if(mode == WATCHING)
+			drawLine(tela, (mapa->entities[ENTITYLISTSIZE - 2].y + 1 - mapa->offsetTop) * tela->shownWidth, (mapa->entities[ENTITYLISTSIZE - 2].x + tela->columnWidth - mapa->offsetRight), " ");
 	}
 
 	if(mode == UPDATING) {
@@ -3060,6 +3102,10 @@ void drawScreen(screen* tela, map *mapa, int mode, int *configFlags)
 		if(j < 20)
 		drawLine(tela, tela->columnWidth + 3 + ( (tela->mapWidth - sizeof(mapa->entities[0].name) ) / 2) + j, -2 + (tela->shownHeight / 2), "_");
 		drawLine(tela, tela->columnWidth + 3 + ( (tela->mapWidth - sizeof(mapa->entities[0].name) ) / 2), (tela->shownHeight / 2), "Enter para continuar");
+	}
+
+	if(mode == WATCHING) {
+
 	}
 
 	arrowMenu *menu;
@@ -3212,9 +3258,9 @@ void showScreen(screen *tela)
 	}
 }
 
-void updateOffsets(map *mapa, screen *tela)
+void updateOffsets(map *mapa, screen *tela, int vampireToCenter)
 {
-	vampire player = mapa->entities[0];
+	vampire player = mapa->entities[vampireToCenter];
 	mapa->offsetRight = player.x - (tela->mapWidth/2);
 	mapa->offsetTop = player.y - (tela->shownHeight/2) - 1;
 	if(mapa->offsetRight < 0) mapa->offsetRight = 0;
@@ -3828,7 +3874,7 @@ void checkAndCreateItem(map* mapa, int doALL)
 	if(mapa->_usablesAmount < mapa->maxItems) {
 		mapa->turnsWithFew++;
 		if(mapa->turnsWithFew > mapa->maxTurnsWithFew || doALL) {
-			int xd, yd;
+			int xd = 0, yd = 0;
 			do {
 				while(1) {
 					xd = (rand() % (mapa->width - 2)) + 1;
