@@ -156,7 +156,7 @@ typedef struct vampire {
 
 	char name[21];
 
-	int itemsListIDS[3];
+	int itemListIDS[3];
 } vampire;
 
 typedef vampire* ptr_vampire;
@@ -306,7 +306,7 @@ typedef struct map {
 
 	door doorList[DOORLISTSIZE];
 	room roomList[ROOMLISTSIZE];
-	usable itemsList[ITEMLISTSIZE];
+	usable itemList[ITEMLISTSIZE];
 } map;
 
 typedef struct keyboard {
@@ -376,8 +376,6 @@ int isPassable(short tile, char type);
 /*************************************************************************************************************************************************
 																MAP I/O FUNCTIONS
 *************************************************************************************************************************************************/
-
-int exitsValidMap();
 
 void readMap(map *mapa);
 
@@ -459,6 +457,8 @@ int printScrollAt(screen *tela, int x, int y, int width, int height, scroll *pap
 																	UTIL
 *************************************************************************************************************************************************/
 
+int existsValidFile(char *fileName);
+
 double power(double a, int b);
 
 int round(double f);
@@ -508,6 +508,8 @@ void pickItem(map *mapa, ptr_vampire vamp);
 usable getRandomItemOfType(int type);
 
 usable getItemAt(int index);
+
+usable getItem(int id, int type, int rarity, int hp, int damage, int lifeSteal, char *name, int amount);
 
 
 unsigned int runNumber;
@@ -571,11 +573,11 @@ int main()
 		{
 			updateOffsets(&mapa, &tela, mode == WATCHING ? ENTITYLISTSIZE - 2 : 0);
 
-			tela.menuList[1].lineState[0] = mapa.entities[0].itemsListIDS[1] == -1 ? 0 : 1;
-			tela.menuList[1].lineState[1] = mapa.entities[0].itemsListIDS[2] == -1 ? 0 : 1;
-			tela.menuList[1].lineState[2] = mapa.entities[0].itemsListIDS[0] == -1 || mapa.entities[0].potAmount == 0 ? 0 : 1;
+			tela.menuList[1].lineState[0] = mapa.entities[0].itemListIDS[1] == -1 ? 0 : 1;
+			tela.menuList[1].lineState[1] = mapa.entities[0].itemListIDS[2] == -1 ? 0 : 1;
+			tela.menuList[1].lineState[2] = mapa.entities[0].itemListIDS[0] == -1 || mapa.entities[0].potAmount == 0 ? 0 : 1;
 			tela.menuList[1].lineState[3] = mapa.entities[0].spentPoints == mapa.entities[0].level * 3 ? 0 : 1;
-			tela.menuList[2].lineState[3] = mapa.entities[0].itemsListIDS[0] == -1 || mapa.entities[0].potAmount == 0 ? 0 : 1;
+			tela.menuList[2].lineState[3] = mapa.entities[0].itemListIDS[0] == -1 || mapa.entities[0].potAmount == 0 ? 0 : 1;
 			tela.menuList[4].lineState[0] = tela.menuList[4].lineState[1] = tela.menuList[4].lineState[2] = mapa.entities[ENTITYLISTSIZE - 1].spentPoints == mapa.entities[ENTITYLISTSIZE - 1].level * 3 ? 0 : 1;
 			tela.menuList[4].lineState[3] = mapa.entities[ENTITYLISTSIZE - 1].precision != 100 && mapa.entities[ENTITYLISTSIZE - 1].spentPoints != mapa.entities[ENTITYLISTSIZE - 1].level * 3 ? 1 : 0;
 
@@ -1037,10 +1039,10 @@ int main()
 						if(mapa.entities[battling].potAmount != 0)
 							dropItem(&mapa, &(mapa.entities[battling]), 0, 0);
 
-						if(mapa.entities[battling].itemsListIDS[1] != -1)
+						if(mapa.entities[battling].itemListIDS[1] != -1)
 							dropItem(&mapa, &(mapa.entities[battling]), 1, 0);
 
-						if(mapa.entities[battling].itemsListIDS[2] != -1)
+						if(mapa.entities[battling].itemListIDS[2] != -1)
 							dropItem(&mapa, &(mapa.entities[battling]), 2, 0);
 
 
@@ -1206,7 +1208,7 @@ void startGame(map *mapa, ptr_vampire player, screen *tela, keyboard *teclado)
 	startScreen(tela);
 
 	/* Inicia o mapa */
-	if(!exitsValidMap()) {
+	if(!existsValidFile("mapa.txt")) {
 		startMap(mapa);
 		addVampToMap(*player, mapa);
 		populateMap(mapa);
@@ -1215,6 +1217,7 @@ void startGame(map *mapa, ptr_vampire player, screen *tela, keyboard *teclado)
 		addVampToMap(*player, mapa);
 		readMap(mapa);
 	}
+	getItemAt(0xffffffff);
 
 	keyboard tecladoPadrao = {
 	.keys = {	{ESC, '[', CUP},
@@ -1525,10 +1528,10 @@ int executeRound(ptr_vampire vamp1, ptr_vampire vamp2, char *roundStrings, int l
 		case POTMOVE:
 			strcpy(&roundStrings[0 * lineLength], "Usou pocao!\0");
 			float heal = 0;
-			if(getItemAt(vamp1->itemsListIDS[0]).hp == 0)
+			if(getItemAt(vamp1->itemListIDS[0]).hp == 0)
 			 	heal = addCurrentHP(vamp1, vamp1->maxHP);
 			else
-				heal = addCurrentHP(vamp1, getItemAt(vamp1->itemsListIDS[0]).hp);
+				heal = addCurrentHP(vamp1, getItemAt(vamp1->itemListIDS[0]).hp);
 			
 
 			if(heal > 0)
@@ -1539,7 +1542,7 @@ int executeRound(ptr_vampire vamp1, ptr_vampire vamp2, char *roundStrings, int l
 			strcpy(&roundStrings[3 * lineLength], "\0");
 			strcpy(&roundStrings[4 * lineLength], "\0");
 			vamp1->potAmount--;
-			if(vamp1->potAmount == 0) vamp1->itemsListIDS[0] = -1;
+			if(vamp1->potAmount == 0) vamp1->itemListIDS[0] = -1;
 			break;
 	}
 
@@ -1866,7 +1869,7 @@ void startMap(map *mapa)
 
 	usable nullItem = {};
 	for(i = 0;i < ITEMLISTSIZE;i++) {
-		mapa->itemsList[i] = nullItem;
+		mapa->itemList[i] = nullItem;
 	}
 
 	for(i = 0;i < 8;i++)
@@ -1886,7 +1889,7 @@ void clearMap(map* mapa)
 	mapa->_usablesAmount = 0;
 
 	memset(mapa->entities, 0, sizeof(mapa->entities));
-	memset(mapa->itemsList, 0, sizeof(mapa->itemsList));
+	memset(mapa->itemList, 0, sizeof(mapa->itemList));
 
 	mapa->mapTiles = malloc((mapa->width * mapa->height) * 2);
 
@@ -2078,10 +2081,10 @@ void populateMap(map *mapa)
 					while((rand() % 30 <= vamp.level) && k < 3) {
 						item = getRandomItemOfType(k);
 						if(k == 0) {
-							vamp.itemsListIDS[0] = item.id;
+							vamp.itemListIDS[0] = item.id;
 							vamp.potAmount = rand() % 4;
 						} else {
-							vamp.itemsListIDS[k] = item.id;
+							vamp.itemListIDS[k] = item.id;
 							vamp.atkDamage += item.damage;
 							vamp.maxHP += item.hp;
 							vamp.currentHP += item.hp;
@@ -2370,16 +2373,6 @@ int isPassable(short tile, char type)
 																MAP I/O FUNCTIONS
 *************************************************************************************************************************************************/
 
-int exitsValidMap()
-{
-	FILE *map = fopen("mapa.txt", "r");
-	if(map == NULL) {
-		return 0;
-	}
-	fclose(map);
-	return 1;
-}
-
 void readMap(map *mapa)
 {
 	FILE *mapFile = fopen("mapa.txt", "r");
@@ -2405,15 +2398,37 @@ void readMap(map *mapa)
 		fscanf(mapFile, " %d %d", &(mapa->entities[0].x), &(mapa->entities[0].y) );
 		fscanf(mapFile, " %d", &i);
 		int j = 0;
+		int x, y, level;
 		for(;j < i;j++) {
 			mapa->entities[ENTITYLISTSIZE - 3].vampireType = 0;
 			mapa->entities[ENTITYLISTSIZE - 3].named = 0;
 			startVampire(&(mapa->entities[ENTITYLISTSIZE - 3]));
 			mapa->entities[ENTITYLISTSIZE - 3].alive = 1;
 
-			fscanf(mapFile, " %d %d %d", &(mapa->entities[ENTITYLISTSIZE - 3].x), &(mapa->entities[ENTITYLISTSIZE - 3].y), &(mapa->entities[ENTITYLISTSIZE - 3].level));
+			fscanf(mapFile, " %d %d %d", &x, &y, &level);
+
+			if(x >= 0 && x < mapa->width && y >= 0 && y < mapa->height) {
+				mapa->entities[ENTITYLISTSIZE - 3].x = x;
+				mapa->entities[ENTITYLISTSIZE - 3].y = y;
+				mapa->entities[ENTITYLISTSIZE - 3].level = level;
+
+				addVampToMap(mapa->entities[ENTITYLISTSIZE - 3], mapa);
+			}
+		}
+		mapa->entities[ENTITYLISTSIZE - 3].vampireType = 2;
+		mapa->entities[ENTITYLISTSIZE - 3].named = 0;
+		startVampire(&(mapa->entities[ENTITYLISTSIZE - 3]));
+		mapa->entities[ENTITYLISTSIZE - 3].alive = 1;
+
+		fscanf(mapFile, " %d %d %d", &x, &y, &level);
+		
+		if(x >= 0 && x < mapa->width && y >= 0 && y < mapa->height) {
+			mapa->entities[ENTITYLISTSIZE - 3].x = x;
+			mapa->entities[ENTITYLISTSIZE - 3].y = y;
+			mapa->entities[ENTITYLISTSIZE - 3].level = level;
+
 			addVampToMap(mapa->entities[ENTITYLISTSIZE - 3], mapa);
-		}		
+		}
 	}
 	int i = 0, j = 0;
 	for(;i < mapa->height;i++) {
@@ -2422,7 +2437,6 @@ void readMap(map *mapa)
 		}
 		putchar('\n');
 	}
-	getchar();
 
 	fclose(mapFile);
 }
@@ -2430,6 +2444,86 @@ void readMap(map *mapa)
 void saveMap(map *mapa)
 {
 
+}
+
+void readItemList(usable **itemList, int *size)
+{
+	if(*itemList != NULL) {
+		free(*itemList);
+		*itemList = NULL;
+	}
+
+	if(!existsValidFile("item.txt")) {
+		*itemList = malloc(sizeof(usable) * 15);
+		*size = 15;
+		(*itemList)[0] = getItem(0, 0, 14, 15, 0, 0, "Pocao fraca", 1);
+		(*itemList)[1] = getItem(1, 0, 10, 30, 0, 0, "Pocao media", 1);
+		(*itemList)[2] = getItem(2, 0, 8, 60, 0, 0, "Pocao forte", 1);
+		(*itemList)[3] = getItem(3, 0, 2, 0, 0, 0, "Super pocao", 1);
+
+		(*itemList)[4] = getItem(4, 1, 20, 0, 8, 0, "Machado", 1);
+		(*itemList)[5] = getItem(5, 1, 1, 0, 17, 0, "Machado das Trevas", 1);
+
+		(*itemList)[6] = getItem(6, 1, 20, 0, 5, 4, "Espada", 1);
+		(*itemList)[7] = getItem(7, 1, 1, 0, 8, 5, "Espada Longa", 1);
+
+		(*itemList)[8] = getItem(8, 1, 20, 0, 2, 7, "Adaga", 1);
+		(*itemList)[9] = getItem(9, 1, 1, 0, 4, 15, "Adaga Vampirica", 1);
+
+		(*itemList)[10] = getItem(10, 2, 10, 10, 0, 0, "de papel", 1);
+		(*itemList)[11] = getItem(11, 2, 6, 25, 0, 0, "normal", 1);
+		(*itemList)[12] = getItem(12, 2, 4, 40, 0, 0, "de aco", 1);
+		(*itemList)[13] = getItem(13, 2, 2, 100, 0, 0, "runica", 1);
+		(*itemList)[14] = getItem(14, 2, 1, 70, 10, 0, "Mech Armor", 1);
+	} else {
+		FILE *file = fopen("item.txt", "r");
+		if(file == NULL)
+			return;
+		int hp = 0, damage = 0, lifeSteal = 0;
+
+		*size = 1;
+		fscanf(file, " %d", &hp);
+		int i = 0;
+		fscanf(file, " %d", &i);
+		*size += i;
+		while(i) {
+			fgets(file, " %*[^\n]");
+			i--;
+		}
+		fscanf(file, " %d", &i);
+		*size += i;
+		fseek(file, 0, SEEK_SET);
+		*itemList = malloc(sizeof(usable) * (*size));
+		(*itemList)[0] = getItem(0, 0, 1, hp, 0, 0, "Pocao", 1);
+		
+		
+		
+		fclose(file);
+	}
+
+	/*{
+				(id, type, rarity, hp, damage, lifeSteal, *name, amount)
+
+		{.id =  0, .type = 0, .rarity = 14, 	.hp = 15, 		.name = "Pocao fraca",							.amount = 1},
+		{.id =  1, .type = 0, .rarity = 10, 	.hp = 30, 		.name = "Pocao media",							.amount = 1},
+		{.id =  2, .type = 0, .rarity = 8, 	.hp = 60, 		.name = "Pocao forte",							.amount = 1},
+		{.id =  3, .type = 0, .rarity = 2, 	.hp = 0, 		.name = "Super pocao",							.amount = 1},
+
+		{.id =  4, .type = 1, .rarity = 20, .damage = 8, 	.name = "Machado",								.amount = 1},
+		{.id =  5, .type = 1, .rarity = 1, 	.damage = 17, 	.name = "Machado das Trevas",					.amount = 1},
+
+		{.id =  6, .type = 1, .rarity = 20, .damage = 5, 	.lifeSteal = 4, 	.name = "Espada",			.amount = 1},
+		{.id =  7, .type = 1, .rarity = 1, 	.damage = 8, 	.lifeSteal = 5, 	.name = "Espada Longa",		.amount = 1},
+
+		{.id =  8, .type = 1, .rarity = 20, .damage = 2, 	.lifeSteal = 7, 	.name = "Adaga",			.amount = 1},
+		{.id =  9, .type = 1, .rarity = 1, 	.damage = 4, 	.lifeSteal = 15, 	.name = "Adaga Vampirica",	.amount = 1},
+
+		{.id = 10, .type = 2, .rarity = 100, .hp = 10, 		.name = "de papel",								.amount = 1},
+		{.id = 11, .type = 2, .rarity = 55, .hp = 25, 		.name = "normal",								.amount = 1},
+		{.id = 12, .type = 2, .rarity = 35, .hp = 40, 		.name = "de aco",								.amount = 1},
+		{.id = 13, .type = 2, .rarity = 10, .hp = 100, 		.name = "runica",								.amount = 1},
+		{.id = 14, .type = 2, .rarity = 2, 	.hp = 70, 		.damage = 10, 		.name = "Mech Armor",		.amount = 1}
+	};*/
 }
 
 /*************************************************************************************************************************************************
@@ -2445,14 +2539,14 @@ void addVampToMap(vampire vamp, map *mapa)
 
 void addItemToMap(usable item, map *mapa)
 {
-	if(mapa->itemsList[mapa->_usablesAmount].state == 0) {
-		mapa->itemsList[mapa->_usablesAmount] = item;
+	if(mapa->itemList[mapa->_usablesAmount].state == 0) {
+		mapa->itemList[mapa->_usablesAmount] = item;
 		mapa->_usablesAmount++;
 	} else {
 		int i = 0;
 		for(;i < mapa->maxItems + mapa->maxItemsOffset;i++) {
-			if(mapa->itemsList[i].state == 0) {
-				mapa->itemsList[i] = item;
+			if(mapa->itemList[i].state == 0) {
+				mapa->itemList[i] = item;
 				mapa->_usablesAmount++;
 				break;
 			}
@@ -3036,7 +3130,7 @@ void drawScreen(screen* tela, map *mapa, int mode, int *configFlags)
 
 		usable item;
 		for(i = 0; i < mapa->maxItems + mapa->maxItemsOffset;i++) {
-			item = mapa->itemsList[i];
+			item = mapa->itemList[i];
 			if(item.state == 1 && item.y > mapa->offsetTop && item.y < mapa->offsetTop + tela->shownHeight - 2 && item.x > mapa->offsetRight && item.x < mapa->offsetRight + tela->mapWidth) {
 				tela->screenPixels[(item.y + 1 - mapa->offsetTop) * tela->shownWidth + (item.x + tela->columnWidth + 2 - mapa->offsetRight)] = item.type == 0 ? 'P' : item.type == 1 ? 'W' : 'A';
 			}
@@ -3342,8 +3436,8 @@ int printVampireAt(screen *tela, int x, int y, int width, vampire vamp, int prin
 	/* cur/maxHP */
 	{
 		int deltaHP = 0;
-		if(vamp.itemsListIDS[2] != -1) {
-			item = getItemAt(vamp.itemsListIDS[2]);
+		if(vamp.itemListIDS[2] != -1) {
+			item = getItemAt(vamp.itemListIDS[2]);
 			deltaHP += item.hp;
 		}
 
@@ -3375,13 +3469,13 @@ int printVampireAt(screen *tela, int x, int y, int width, vampire vamp, int prin
 	/* atkDamage */
 	{
 		float deltaDamage = 0;
-		if(vamp.itemsListIDS[1] != -1) {
-			item = getItemAt(vamp.itemsListIDS[1]);
+		if(vamp.itemListIDS[1] != -1) {
+			item = getItemAt(vamp.itemListIDS[1]);
 			deltaDamage += item.damage;
 		}
 
-		if(vamp.itemsListIDS[2] != -1) {
-			item = getItemAt(vamp.itemsListIDS[2]);
+		if(vamp.itemListIDS[2] != -1) {
+			item = getItemAt(vamp.itemListIDS[2]);
 			deltaDamage += item.damage;
 		}
 
@@ -3407,8 +3501,8 @@ int printVampireAt(screen *tela, int x, int y, int width, vampire vamp, int prin
 	{
 		int lifeSteal = 0;
 
-		if(vamp.itemsListIDS[1] != -1) {
-			item = getItemAt(vamp.itemsListIDS[1]);
+		if(vamp.itemListIDS[1] != -1) {
+			item = getItemAt(vamp.itemListIDS[1]);
 			lifeSteal += item.lifeSteal;
 		}
 
@@ -3438,8 +3532,8 @@ int printVampireAt(screen *tela, int x, int y, int width, vampire vamp, int prin
 		return i + y;
 
 	if(vamp.potAmount > 0) {
-		int nameSize = sprintf(string, "%s", &(getItemAt(vamp.itemsListIDS[0]).name[0]));
-		if(getItemAt(vamp.itemsListIDS[0]).id == 3) {
+		int nameSize = sprintf(string, "%s", &(getItemAt(vamp.itemListIDS[0]).name[0]));
+		if(getItemAt(vamp.itemListIDS[0]).id == 3) {
 			sprintf(string, "%s:%*d%%", string, width - 2 - nameSize, 100);
 		} else {
 			sprintf(string, "%s:%*d", string, width - 1 - nameSize, vamp.potAmount);
@@ -3450,8 +3544,8 @@ int printVampireAt(screen *tela, int x, int y, int width, vampire vamp, int prin
 	drawLine(tela, x, y + i, string);
 	i++;
 
-	if(vamp.itemsListIDS[1] != -1) {
-		item = getItemAt(vamp.itemsListIDS[1]);
+	if(vamp.itemListIDS[1] != -1) {
+		item = getItemAt(vamp.itemListIDS[1]);
 		sprintf(string, "Arma: %*s", width - 6, &(item.name[0]));
 		drawLine(tela, x, y + i, string);
 
@@ -3462,8 +3556,8 @@ int printVampireAt(screen *tela, int x, int y, int width, vampire vamp, int prin
 		drawLine(tela, x, y + i + 1, string);
 	}
 	i += 2;
-	if(vamp.itemsListIDS[2] != -1) {
-		item = getItemAt(vamp.itemsListIDS[2]);
+	if(vamp.itemListIDS[2] != -1) {
+		item = getItemAt(vamp.itemListIDS[2]);
 		if(item.id == 14) {
 			sprintf(string, "%s:", &(item.name[0]));
 			drawLine(tela, x, y + i, string);
@@ -3595,6 +3689,16 @@ int printScrollAt(screen *tela, int x, int y, int width, int height, scroll *pap
 																	UTIL
 *************************************************************************************************************************************************/
 
+int existsValidFile(char *fileName)
+{
+	FILE *file = fopen(fileName, "r");
+	if(file == NULL) {
+		return 0;
+	}
+	fclose(file);
+	return 1;
+}
+
 double power(double a, int b)
 {
 	double result = a;
@@ -3662,9 +3766,9 @@ int randomWeightedAvarage(int weightsSize, int* weights)
 void startVampire(ptr_vampire vamp)
 {
 	clearVampState(vamp);
-	vamp->itemsListIDS[0] = -1;
-	vamp->itemsListIDS[1] = -1;
-	vamp->itemsListIDS[2] = -1;
+	vamp->itemListIDS[0] = -1;
+	vamp->itemListIDS[1] = -1;
+	vamp->itemListIDS[2] = -1;
 	vamp->experience = 0;
 	vamp->alive = 1;
 	vamp->battling = -1;
@@ -3901,16 +4005,16 @@ void checkAndCreateItem(map* mapa, int doALL)
 
 int getPotionHeal(ptr_vampire vamp)
 {
-	if(vamp->itemsListIDS[0] == -1)
+	if(vamp->itemListIDS[0] == -1)
 		return getItemAt(0).hp;
-	if(getItemAt(vamp->itemsListIDS[0]).hp == 0)
+	if(getItemAt(vamp->itemListIDS[0]).hp == 0)
 		return vamp->maxHP - vamp->currentHP;
-	return getItemAt(vamp->itemsListIDS[0]).hp;
+	return getItemAt(vamp->itemListIDS[0]).hp;
 }
 
 void dropItem(map *mapa, ptr_vampire vamp, int type, int dropUnder)
 {
-	usable item = getItemAt(vamp->itemsListIDS[type]);
+	usable item = getItemAt(vamp->itemListIDS[type]);
 
 	if(type == 0)
 	{
@@ -3923,7 +4027,7 @@ void dropItem(map *mapa, ptr_vampire vamp, int type, int dropUnder)
 		vamp->atkDamage -= item.damage;
 		vamp->lifeSteal -= item.lifeSteal;
 	}
-	vamp->itemsListIDS[type] = -1;
+	vamp->itemListIDS[type] = -1;
 	item.state = 1;
 	item.x = vamp->x;
 	item.y = vamp->y;
@@ -3958,46 +4062,46 @@ void pickItem(map *mapa, ptr_vampire vamp)
 	usable item;
 	for(;i < mapa->maxItems + mapa->maxItemsOffset;i++)
 	{
-		item = mapa->itemsList[i];
+		item = mapa->itemList[i];
 		if(item.state && vamp->x == item.x && vamp->y == item.y)
 		{
 			if(item.type == 0) {
-				if(vamp->itemsListIDS[0] == item.id || vamp->itemsListIDS[0] == -1 || vamp->potAmount == 0) {
+				if(vamp->itemListIDS[0] == item.id || vamp->itemListIDS[0] == -1 || vamp->potAmount == 0) {
 					vamp->potAmount += item.amount;
-					mapa->itemsList[i].state = 0;
-					vamp->itemsListIDS[0] = item.id;
+					mapa->itemList[i].state = 0;
+					vamp->itemListIDS[0] = item.id;
 					if(mapa->maxItemsOffset > 0 && i == mapa->maxItems + mapa->maxItemsOffset) 
 						mapa->maxItemsOffset--;
 					mapa->_usablesAmount--;
 				} else {
-					usable holdItem = getItemAt(vamp->itemsListIDS[0]);
+					usable holdItem = getItemAt(vamp->itemListIDS[0]);
 
 					holdItem.amount = vamp->potAmount;
 					holdItem.x = item.x;
 					holdItem.y = item.y;
 					holdItem.state = 1;
 
-					mapa->itemsList[i] = holdItem;
+					mapa->itemList[i] = holdItem;
 
-					vamp->itemsListIDS[0] = item.id;
+					vamp->itemListIDS[0] = item.id;
 					vamp->potAmount = item.amount;
 				}
 			} else {
-				if(vamp->itemsListIDS[item.type] == -1) {
-					vamp->itemsListIDS[item.type] = item.id;
-					mapa->itemsList[i].state = 0;
+				if(vamp->itemListIDS[item.type] == -1) {
+					vamp->itemListIDS[item.type] = item.id;
+					mapa->itemList[i].state = 0;
 					if(i == mapa->maxItems + mapa->maxItemsOffset && mapa->maxItemsOffset > 0)
 						mapa->maxItemsOffset--; 
 					mapa->_usablesAmount--;
 				} else {
-					usable holdItem = getItemAt(vamp->itemsListIDS[ item.type ]);
+					usable holdItem = getItemAt(vamp->itemListIDS[ item.type ]);
 					holdItem.x = item.x;
 					holdItem.y = item.y;
 					holdItem.state = 1;
 
-					mapa->itemsList[i] = holdItem;
+					mapa->itemList[i] = holdItem;
 
-					vamp->itemsListIDS[item.type] = item.id;
+					vamp->itemListIDS[item.type] = item.id;
 				}
 
 				vamp->atkDamage += item.damage;
@@ -4005,7 +4109,7 @@ void pickItem(map *mapa, ptr_vampire vamp)
 				vamp->currentHP += item.hp;
 				vamp->lifeSteal += item.lifeSteal;
 			}
-			item = mapa->itemsList[i];
+			item = mapa->itemList[i];
 			return;
 		}
 	}
@@ -4041,30 +4145,35 @@ usable getRandomItemOfType(int type)
 
 usable getItemAt(int index)
 {
-	static usable ITEMLIST[] = {
-		{.id =  0, .type = 0, .rarity = 14, 	.hp = 15, 		.name = "Pocao fraca",							.amount = 1},
-		{.id =  1, .type = 0, .rarity = 10, 	.hp = 30, 		.name = "Pocao media",							.amount = 1},
-		{.id =  2, .type = 0, .rarity = 8, 	.hp = 60, 		.name = "Pocao forte",							.amount = 1},
-		{.id =  3, .type = 0, .rarity = 2, 	.hp = 0, 		.name = "Super pocao",							.amount = 1},
+	static int SIZE = 0;
+	static usable *ITEMLIST = NULL;
 
-		{.id =  4, .type = 1, .rarity = 20, .damage = 8, 	.name = "Machado",								.amount = 1},
-		{.id =  5, .type = 1, .rarity = 1, 	.damage = 17, 	.name = "Machado das Trevas",					.amount = 1},
+	if(index == 0xffffffff) {
+		readItemList(&ITEMLIST, &SIZE);
+		index = 0;
+	} else if(index == 0xfffffffe) {
+		free(ITEMLIST);
+		SIZE = 0;
+		usable kappa;
+		return kappa;
+	}
 
-		{.id =  6, .type = 1, .rarity = 20, .damage = 5, 	.lifeSteal = 4, 	.name = "Espada",			.amount = 1},
-		{.id =  7, .type = 1, .rarity = 1, 	.damage = 8, 	.lifeSteal = 5, 	.name = "Espada Longa",		.amount = 1},
-
-		{.id =  8, .type = 1, .rarity = 20, .damage = 2, 	.lifeSteal = 7, 	.name = "Adaga",			.amount = 1},
-		{.id =  9, .type = 1, .rarity = 1, 	.damage = 4, 	.lifeSteal = 15, 	.name = "Adaga Vampirica",	.amount = 1},
-
-		{.id = 10, .type = 2, .rarity = 100, .hp = 10, 		.name = "de papel",								.amount = 1},
-		{.id = 11, .type = 2, .rarity = 55, .hp = 25, 		.name = "normal",								.amount = 1},
-		{.id = 12, .type = 2, .rarity = 35, .hp = 40, 		.name = "de aco",								.amount = 1},
-		{.id = 13, .type = 2, .rarity = 10, .hp = 100, 		.name = "runica",								.amount = 1},
-		{.id = 14, .type = 2, .rarity = 2, 	.hp = 70, 		.damage = 10, 		.name = "Mech Armor",		.amount = 1}
-	};
-
-	if(index < 0 || index > sizeof(ITEMLIST)/sizeof(usable))
-		index = (sizeof(ITEMLIST)/sizeof(usable)) - 1;
+	if(index < 0 || index > SIZE)
+		index = SIZE - 1;
 
 	return ITEMLIST[index];
+}
+
+usable getItem(int id, int type, int rarity, int hp, int damage, int lifeSteal, char *name, int amount)
+{
+
+	usable item = {.id = id, .type = type, .rarity = rarity, .hp = hp, .amount = amount};
+	int i = 0;
+	while(1) {
+		if(name[i] == '\0')
+			break;
+		item.name[i] = name[i];
+		i++;
+	}
+	return item;
 }
