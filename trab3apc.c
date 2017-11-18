@@ -1216,6 +1216,8 @@ void startGame(map *mapa, ptr_vampire player, screen *tela, keyboard *teclado)
 		startMap(mapa);
 		addVampToMap(*player, mapa);
 		readMap(mapa);
+		printf("%p\n", mapa->entities[1].functionAI);
+		getchar();
 	}
 	getItemAt(0xffffffff);
 
@@ -2453,7 +2455,7 @@ void readItemList(usable **itemList, int *size)
 		*itemList = NULL;
 	}
 
-	if(!existsValidFile("item.txt")) {
+	if(!existsValidFile("itens.txt")) {
 		*itemList = malloc(sizeof(usable) * 15);
 		*size = 15;
 		(*itemList)[0] = getItem(0, 0, 14, 15, 0, 0, "Pocao fraca", 1);
@@ -2476,54 +2478,63 @@ void readItemList(usable **itemList, int *size)
 		(*itemList)[13] = getItem(13, 2, 2, 100, 0, 0, "runica", 1);
 		(*itemList)[14] = getItem(14, 2, 1, 70, 10, 0, "Mech Armor", 1);
 	} else {
-		FILE *file = fopen("item.txt", "r");
+		FILE *file = fopen("itens.txt", "r");
 		if(file == NULL)
 			return;
+
 		int hp = 0, damage = 0, lifeSteal = 0;
 
 		*size = 1;
+		int i = 0, j = 0;
 		fscanf(file, " %d", &hp);
-		int i = 0;
 		fscanf(file, " %d", &i);
 		*size += i;
 		while(i) {
-			fgets(file, " %*[^\n]");
+			fscanf(file, " %*[^\n]");
 			i--;
 		}
 		fscanf(file, " %d", &i);
 		*size += i;
-		fseek(file, 0, SEEK_SET);
 		*itemList = malloc(sizeof(usable) * (*size));
-		(*itemList)[0] = getItem(0, 0, 1, hp, 0, 0, "Pocao", 1);
 		
+		fseek(file, 0, SEEK_SET);
+		int id = 0;
+		(*itemList)[id] = getItem(id, 0, 1, hp, 0, 0, "Pocao", 1);
+		id++;
 		
-		
+
+
+		fscanf(file, " %*d %d", &j);
+		char string[15];
+		i = 0;
+		while(i - j) {
+			sprintf(string, "Arma %d", i + 1);
+			fscanf(file, " %d %d", &damage, &lifeSteal);
+			(*itemList)[id] = getItem(id, 1, 1, 0, damage, lifeSteal, string, 1);
+			id++;
+			i++;
+		}
+
+		fscanf(file, " %d", &j);
+		i = 0;
+		while(i - j) {
+			sprintf(string, "%d", i + 1);
+			fscanf(file, " %d", &hp);
+			(*itemList)[id] = getItem(id, 2, 1, hp, 0, 0, string, 1);
+			id++;
+			i++;
+		}
 		fclose(file);
 	}
 
-	/*{
-				(id, type, rarity, hp, damage, lifeSteal, *name, amount)
-
-		{.id =  0, .type = 0, .rarity = 14, 	.hp = 15, 		.name = "Pocao fraca",							.amount = 1},
-		{.id =  1, .type = 0, .rarity = 10, 	.hp = 30, 		.name = "Pocao media",							.amount = 1},
-		{.id =  2, .type = 0, .rarity = 8, 	.hp = 60, 		.name = "Pocao forte",							.amount = 1},
-		{.id =  3, .type = 0, .rarity = 2, 	.hp = 0, 		.name = "Super pocao",							.amount = 1},
-
-		{.id =  4, .type = 1, .rarity = 20, .damage = 8, 	.name = "Machado",								.amount = 1},
-		{.id =  5, .type = 1, .rarity = 1, 	.damage = 17, 	.name = "Machado das Trevas",					.amount = 1},
-
-		{.id =  6, .type = 1, .rarity = 20, .damage = 5, 	.lifeSteal = 4, 	.name = "Espada",			.amount = 1},
-		{.id =  7, .type = 1, .rarity = 1, 	.damage = 8, 	.lifeSteal = 5, 	.name = "Espada Longa",		.amount = 1},
-
-		{.id =  8, .type = 1, .rarity = 20, .damage = 2, 	.lifeSteal = 7, 	.name = "Adaga",			.amount = 1},
-		{.id =  9, .type = 1, .rarity = 1, 	.damage = 4, 	.lifeSteal = 15, 	.name = "Adaga Vampirica",	.amount = 1},
-
-		{.id = 10, .type = 2, .rarity = 100, .hp = 10, 		.name = "de papel",								.amount = 1},
-		{.id = 11, .type = 2, .rarity = 55, .hp = 25, 		.name = "normal",								.amount = 1},
-		{.id = 12, .type = 2, .rarity = 35, .hp = 40, 		.name = "de aco",								.amount = 1},
-		{.id = 13, .type = 2, .rarity = 10, .hp = 100, 		.name = "runica",								.amount = 1},
-		{.id = 14, .type = 2, .rarity = 2, 	.hp = 70, 		.damage = 10, 		.name = "Mech Armor",		.amount = 1}
-	};*/
+	/*
+	printf("%d\n", (*size));
+	int i = 0;
+	for(;i < (*size);i++) {
+		printf("%s: %d, %d, %d, %d\n", (*itemList)[i].name, (*itemList)[i].id, (*itemList)[i].hp, (*itemList)[i].damage, (*itemList)[i].lifeSteal);
+	}
+	getchar();
+	*/
 }
 
 /*************************************************************************************************************************************************
@@ -2621,6 +2632,8 @@ void freeAll(map *mapa, screen *tela)
 			free((tela->helpScroll.pageList[i])[j]);
 		free(tela->helpScroll.pageList[i]);
 	}
+
+	getItemAt(0xfffffffe);
 }
 
 /*************************************************************************************************************************************************
@@ -4167,7 +4180,7 @@ usable getItemAt(int index)
 usable getItem(int id, int type, int rarity, int hp, int damage, int lifeSteal, char *name, int amount)
 {
 
-	usable item = {.id = id, .type = type, .rarity = rarity, .hp = hp, .amount = amount};
+	usable item = {.id = id, .type = type, .rarity = rarity, .hp = hp, .damage = damage, .lifeSteal = lifeSteal, .amount = amount};
 	int i = 0;
 	while(1) {
 		if(name[i] == '\0')
