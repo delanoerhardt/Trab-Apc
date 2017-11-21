@@ -16,18 +16,17 @@
 #include <fcntl.h>
 #include <math.h>
 
-#define CONSONANTS char consoantes[18] = "bcdfghjklmnprstvxy"; /* Sem q, w e z por puro preconceito mesmo. */
-#define VOGALS char vogais[5] = "aeiou";
+#define CONSONANTS char consoantes[18] = {'b', 'c', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'r', 's', 't', 'v', 'x', 'y'}; /* Sem q, w e z por puro preconceito mesmo. */
+#define VOGALS char vogais[5] = {'a', 'e', 'i', 'o', 'u'};
 
 #define NAORODOUAINDA 0
 #define FAILED 1
 #define SUCCESS 2
 
-#define DISPLAYSTRINGSIZE 1087
-#define DISPLAYSTRING char _displayStringHolder[DISPLAYSTRINGSIZE];
+#define MAPLENGHTTILLARRAYS 510
 
-#define MAPWIDTH 200
-#define MAPHEIGHT 200
+#define MAPWIDTH 120
+#define MAPHEIGHT 30
 
 #define HPATTRSCALE 7
 #define LIFESTEALATTRSCALE 1
@@ -105,11 +104,6 @@
 
 #define CLEAR 1
 
-#define MAINMENU -1
-#define HOWTOPLAY -2
-#define CONFIGUR -3
-#define CONFIGURSCREEN -4
-#define NAMING -5
 #define MOVINMAP 0
 #define MAPMENU 1
 #define BATTLING 2
@@ -117,21 +111,29 @@
 #define LOSTSCREEN 4
 #define WONSCREEN 5
 #define WATCHING 6
+#define MAINMENU 7
+#define HOWTOPLAY 8
+#define CONFIGUR 9
+#define CONFIGURSCREEN 10
+#define NAMING 11
 
 typedef struct map map;
 
 typedef struct vampire vampire;
 
 typedef struct vampire {
-	void (*functionAI)(struct map*, struct vampire*);
 
 	int id;
 
-	int alive : 1;
-	int stunned : 1;
-	int lostFirst : 1;
-	int named : 1;
-	int vampireType : 2; /* 0 - enemy normal vampire; 1 - player vampire; 2 - dracula  */
+	unsigned int alive : 1;
+	unsigned int stunned : 1;
+	unsigned int lostFirst : 1;
+	unsigned int named : 1;
+	int xMotion:2;
+	unsigned int vampireType : 2; /* 0 - enemy normal vampire; 1 - player vampire; 2 - dracula; 3 - System helper vampire */
+
+	int yMotion:2;
+	int move:6;
 	
 	float atkDamage;
 	float currentHP;
@@ -145,18 +147,16 @@ typedef struct vampire {
 	int nextLevel;
 	int spentPoints;
 
-	int move;
 	int battling;
 
 	int x, y; /* map positions */
-	int xMotion,
-		yMotion,
-		xStart,
+	int xStart,
 		yStart;
 
 	char name[21];
-
 	int itemListIDS[3];
+
+	void (*functionAI)(struct map*, struct vampire*);
 } vampire;
 
 typedef vampire* ptr_vampire;
@@ -171,12 +171,10 @@ typedef struct arrowMenu {
 	int changeState[MENUSAMOUNT];
 
 	int curLine,
-		maxLine;
+		state; /* 0 - Not shown/created; 1 - Showing; 2 - Unfocused*/
+	
+	int maxLine;
 
-	int lineOffset,
-		drewLines;
-
-	int state; /* 0 - Not shown/created; 1 - Showing; 2 - Unfocused*/
 	int x, /* -2 - left column; -1 - right column; w/e - x coordinate */
 		y;
 
@@ -206,8 +204,6 @@ typedef struct scroll {
 typedef struct screen {
 	char screenPixels[11984];
 
-	int width,
-		height;
 
 	int	offsetTop,
 		offsetRight;
@@ -221,6 +217,9 @@ typedef struct screen {
 	int currentMenu;
 
 	int drawColored;
+
+	int width,
+		height;
 
 	arrowMenu menuList[MENUSAMOUNT];
 	scroll helpScroll;
@@ -252,7 +251,6 @@ typedef struct room {
 } room;
 
 typedef struct usable {
-	char name[20];
 	int id;
 	int x, y;
 	int type;
@@ -262,6 +260,7 @@ typedef struct usable {
 	int state;
 	int rarity;
 	int amount;
+	char name[20];
 } usable;
 
 typedef struct map {
@@ -269,6 +268,7 @@ typedef struct map {
 
 	int width,
 		height;
+
 
 	int offsetRight,
 		offsetTop;
@@ -282,21 +282,18 @@ typedef struct map {
 		deltaCorridorLenght;
 
 	int maxDoors;
-
-	int currentRoom;
-
 	int _doorAmount;
 	int workingDoorIndex;
 
 	int _entitiesAmount;
 	int ticksTillComeBack;
-	vampire entities[ENTITYLISTSIZE];
 
 	int maxRooms;
 	int _roomAmount;
+	int currentRoom;
 
-	int _usablesAmount,
-		maxItems,
+	int maxItems,
+		_usablesAmount,
 		maxItemsOffset;
 
 	int turnsWithFew,
@@ -304,10 +301,31 @@ typedef struct map {
 
 	char roundStrings[10][41];
 
+	vampire entities[ENTITYLISTSIZE];
 	door doorList[DOORLISTSIZE];
 	room roomList[ROOMLISTSIZE];
 	usable itemList[ITEMLISTSIZE];
 } map;
+
+typedef struct config {
+	unsigned int running:1;
+	unsigned int changed:1;
+	unsigned int askForDifficultyBeforeGame:1;
+	unsigned int saveGame:1;
+	unsigned int readName:1;
+	unsigned int lives:3;
+
+	unsigned int playerMoved:1;
+	unsigned int messageShown:1;
+	unsigned int getInput:1;
+	unsigned int dontCheckBattleFor:3;
+	unsigned int difficulty:2;
+
+	unsigned int mode:4;
+	unsigned int lastMode:4;
+
+	int option:4;
+} config;
 
 typedef struct keyboard {
 	char keys[KEYSAMOUNT][3];
@@ -320,7 +338,11 @@ typedef struct keyboard {
 																GAME FUNCTIONS
 *************************************************************************************************************************************************/
 
-void startGame(map *mapa, ptr_vampire player, screen *tela, keyboard *teclado);
+void startGame(map *mapa, ptr_vampire player, screen *tela, keyboard *teclado, config *bits);
+
+void saveGame(map *mapa, screen *tela, config *bits);
+
+void readGame(map *mapa, screen *tela, config *bits);
 
 int doGameTick(map* mapa);
 
@@ -381,6 +403,12 @@ void readMap(map *mapa);
 
 void saveMap(map *mapa);
 
+void readItemList(usable **itemList, int *size);
+
+void fillMap(map *mapa, int x, int y);
+
+void fillRoom(map *mapa, int x, int y, int level);
+
 /*************************************************************************************************************************************************
 																ARRAY MANAGMENT FUNCTIONS
 *************************************************************************************************************************************************/
@@ -433,7 +461,7 @@ void startScreen(screen *tela);
 
 void clearScreen(screen *tela);
 
-void drawScreen(screen* tela, map *mapa, int mode, int *configFlags);
+void drawScreen(screen* tela, map *mapa, config bits);
 
 void showScreen(screen *tela);
 
@@ -499,11 +527,15 @@ int kbhit();
 
 void checkAndCreateItem(map* mapa, int doALL);
 
+void distributeItemsVampsNMap(map *mapa);
+
 int getPotionHeal(ptr_vampire vamp);
 
 void dropItem(map *mapa, ptr_vampire vamp, int type, int dropUnder);
 
 void pickItem(map *mapa, ptr_vampire vamp);
+
+void giveRandomItems(ptr_vampire vamp);
 
 usable getRandomItemOfType(int type);
 
@@ -512,66 +544,27 @@ usable getItemAt(int index);
 usable getItem(int id, int type, int rarity, int hp, int damage, int lifeSteal, char *name, int amount);
 
 
-unsigned int runNumber;
-
 
 int main()
 {
+
 	if(CLEAR)
 		system("clear");
 	srand(time(NULL));
-
-	FILE *controlFile = fopen("logs/control.txt", "r");
-	if(controlFile == NULL){
-		runNumber = 0;
-	} else {
-		fscanf(controlFile, " %u", &runNumber);
-		fclose(controlFile);
-	}
-	controlFile = fopen("logs/control.txt", "w");
-
-	if(controlFile != NULL) {
-		fprintf(controlFile, "%u", runNumber + 1);
-		fclose(controlFile);
-	}
 
 	map mapa = {};
 	vampire player = {};
 	screen tela = {};
 	keyboard teclado = {};
+	config bits = {.running = 1, .changed = 1, .playerMoved = 1, .mode = MAINMENU, .getInput = 1};
 
-	startGame(&mapa, &player, &tela, &teclado);
+	startGame(&mapa, &player, &tela, &teclado, &bits);
 
-	/* Configs */
-	int configFlags[8] ={	0 				/* 0 - EASY; 1 - MEDIUM; 2 - HARD */, 
-							1				/* 0 - dontAskForDifficultyBeforeGame; 1 - askForDifficultyBeforeGame */, 
-							1 				/* 0 - dontSaveGame; 1 - saveGame */,
-						   MINSCREENWIDTH 	/* < 0 - screenSizeXNotDefined; > 0 - screenSizeX */,
-						   MINSCREENHEIGHT 	/* < 0 - screenSizeYNotDefined; > 0 - screenSizeY */,
-							1 				/* 0 - dontReadName; 1 - readName */ };
-
-	int running = 1,
-		changed = 1,
-		option = 0,
-		lives = 5,
-		playerMoved = 1,
-		messageShown = 0,
-		battling = -1,
-		getInput = 1,
-		dontCheckBattleFor = 0,
-		lastMode,
-		mode = MAINMENU; /* Mode -1:	Main menu
-							Mode -2:	Como jogar
-							Mode -3:	Opcoes
-							Mode 0: 	Andando no mapa
-							Mode 1: 	Menu do mapa
-							MOde 2: 	Batalhando */
-
-	while(running)
+	while(bits.running)
 	{
-		if(changed)
+		if(bits.changed)
 		{
-			updateOffsets(&mapa, &tela, mode == WATCHING ? ENTITYLISTSIZE - 2 : 0);
+			updateOffsets(&mapa, &tela, bits.mode == WATCHING ? ENTITYLISTSIZE - 2 : 0);
 
 			tela.menuList[1].lineState[0] = mapa.entities[0].itemListIDS[1] == -1 ? 0 : 1;
 			tela.menuList[1].lineState[1] = mapa.entities[0].itemListIDS[2] == -1 ? 0 : 1;
@@ -581,83 +574,104 @@ int main()
 			tela.menuList[4].lineState[0] = tela.menuList[4].lineState[1] = tela.menuList[4].lineState[2] = mapa.entities[ENTITYLISTSIZE - 1].spentPoints == mapa.entities[ENTITYLISTSIZE - 1].level * 3 ? 0 : 1;
 			tela.menuList[4].lineState[3] = mapa.entities[ENTITYLISTSIZE - 1].precision != 100 && mapa.entities[ENTITYLISTSIZE - 1].spentPoints != mapa.entities[ENTITYLISTSIZE - 1].level * 3 ? 1 : 0;
 
-			messageShown = 0;
+			bits.messageShown = 0;
 
-			drawScreen(&tela, &mapa, mode, configFlags);
-			if(!playerMoved && mode == 0 && option >= UP && option <= LEFT) {
+			drawScreen(&tela, &mapa, bits);
+			if(!bits.playerMoved && bits.mode == 0 && bits.option >= UP && bits.option <= LEFT) {
 				drawLine(&tela, 1, tela.shownHeight - 2, "Voce nao pode ir ai!");
-				messageShown = 1;
+				bits.messageShown = 1;
 			}
 
-			if(mode == MOVINMAP || mode == MAPMENU || mode == BATTLING)
-				printLives(&tela, lives);
+			if(bits.mode == MOVINMAP || bits.mode == MAPMENU || bits.mode == BATTLING || bits.mode == WATCHING)
+				printLives(&tela, bits.lives);
 
 			showScreen(&tela);
-			changed = 0;
+			bits.changed = 0;
 		}
 
-		if(dontCheckBattleFor == 0)
+		if(bits.dontCheckBattleFor == 0)
 		{
-			if(mode == MOVINMAP || mode == MAPMENU)
+			if(bits.mode == MOVINMAP || bits.mode == MAPMENU)
 			{
-				battling = mapa.entities[0].battling = checkForBattle(&mapa);
+				mapa.entities[0].battling = checkForBattle(&mapa);
 
-				if(battling != -1) {
-					mapa.entities[battling].functionAI = NULL;
-					changed = 1;
-					mode = BATTLING;
-					playerMoved = 0;
+				if(mapa.entities[0].battling != -1) {
+					mapa.entities[mapa.entities[0].battling].functionAI = NULL;
+					bits.changed = 1;
+					bits.mode = BATTLING;
+					bits.playerMoved = 0;
 					changeMenuState(&tela, 2);
+					putchar('\n');
 					continue;
 				}
 			}
 		} else
-			dontCheckBattleFor--;
+			bits.dontCheckBattleFor--;
 
 
-		if(getInput)
-			option = readKeyPress(teclado);
+		if(bits.getInput)
+			bits.option = readKeyPress(teclado);
 
-		if(option == P) {
-			lives = 1;
+		if(bits.option == P) {
+			saveGame(&mapa, &tela, &bits);
+			saveMap(&mapa);
+			bits.changed = 1;
 			continue;
 		}
 
-		switch(mode)
+		switch(bits.mode)
 		{
 			case MAINMENU:
 			{
-				if(option == EXIT) {
-					changed = 1;
-					running = 0;
+				if(bits.option == EXIT) {
+					bits.changed = 1;
+					bits.running = 0;
 					break;
 				}
-				option = doMenuInput(&tela, option, 1, 1);
-				changed = 1;
-				if(option == -1)
+				bits.option = doMenuInput(&tela, bits.option, 1, 1);
+				bits.changed = 1;
+				if(bits.option == -1)
 					break;
 
-				if(option == tela.menuList[tela.currentMenu].maxLine - 1) {
-					running = 0;
+				if(bits.option == tela.menuList[tela.currentMenu].maxLine - 1) {
+					bits.running = 0;
 					break;
-				} else if(option == 0) {
-					if(!mapa.entities[0].named) {
-						lastMode = mode;
-						mode = NAMING;
-						tela.menuList[6].state = 0;
-						getInput = 0;
-					} else {
-						mode = mapa.entities[0].stunned ? BATTLING : MOVINMAP;
+				} else if(bits.option == 0) {
+					bits.mode = mapa.entities[0].battling == -1 ? MOVINMAP : BATTLING;
+					tela.drawColored = 1;
+					tela.menuList[6].state = 0;
+					changeMenuState(&tela, mapa.entities[0].battling == -1 ? 0 : mapa.entities[0].stunned == 1 ? 3 : 2);
+					putchar('\n');
+					break;
+				} else if(bits.option == 1) {
+					resetMenuValues(&tela, 5);
+					startVampire(&player);
+					bits.lives = 5;
+					freeAll(&mapa, &tela);
+					getItemAt(0xff00ff00);
+					clearScreen(&tela);
+					clearMap(&mapa);
+					addVampToMap(player, &mapa);
+					populateMap(&mapa);
+					if(player.named) {
+						bits.mode = MOVINMAP;
 						tela.drawColored = 1;
-						changeMenuState(&tela, mapa.entities[0].stunned ? 3 : 0);
+						changeMenuState(&tela, 0);
+					} else {
+						bits.lastMode = bits.mode;
+						bits.mode = NAMING;
+						bits.getInput = 0;
+						tela.menuList[6].state = 0;
+						tela.drawColored = 0;
 					}
-				} else if(option == 1) {
-					mode = HOWTOPLAY;
+
+				} else if(bits.option == 2) {
+					bits.mode = HOWTOPLAY;
 					changeMenuState(&tela, 7);
 					tela.helpScroll.state = 1;
 					tela.drawColored = 0;
-				} else if(option == 2) {
-					mode = CONFIGUR;
+				} else if(bits.option == 3) {
+					bits.mode = CONFIGUR;
 					tela.drawColored = 0;
 					changeMenuState(&tela, 8);
 				}
@@ -666,23 +680,23 @@ int main()
 
 			case HOWTOPLAY:
 			{
-				if(option == EXIT) {
-					mode = MAINMENU;
-					changed = 1;
+				if(bits.option == EXIT) {
+					bits.mode = MAINMENU;
+					bits.changed = 1;
 					changeMenuState(&tela, 6);
 					tela.drawColored = 1;
 					break;
 				}
 				
 
-				option = doScrollInput(&(tela.helpScroll), option);
+				bits.option = doScrollInput(&(tela.helpScroll), bits.option);
 
-				if(option == -1) {
-					changed = 1;
+				if(bits.option == -1) {
+					bits.changed = 1;
 					break;
-				} else if(option == X || option == Z) {
-					mode = MAINMENU;
-					changed = 1;
+				} else if(bits.option == X || bits.option == Z) {
+					bits.mode = MAINMENU;
+					bits.changed = 1;
 					tela.drawColored = 1;
 					changeMenuState(&tela, 6);
 				}
@@ -691,83 +705,82 @@ int main()
 
 			case CONFIGUR:
 			{
-				changed = 1;
-				if(option == EXIT) {
-					mode = MAINMENU;
+				bits.changed = 1;
+				if(bits.option == EXIT) {
+					bits.mode = MAINMENU;
 					changeMenuState(&tela, 6);
 					tela.drawColored = 1;
 					break;
 				}
 
-				option = doMenuInput(&tela, option, 1, 0);
+				bits.option = doMenuInput(&tela, bits.option, 1, 0);
 
-				if(option == -1) {
+				if(bits.option == -1) {
 					break;
 				}
 
-				if(option == tela.menuList[tela.currentMenu].maxLine - 1) {
-					mode = MAINMENU;
+				if(bits.option == tela.menuList[tela.currentMenu].maxLine - 1) {
+					bits.mode = MAINMENU;
 					resetMenuValues(&tela, 8);
 					changeMenuState(&tela, 6);
 					break;
-				} else if(option == 0) {
-					configFlags[0] = (configFlags[0] + 1) % 3;
-				} else if(option == 1) {
-					mode = CONFIGURSCREEN;
+				} else if(bits.option == 0) {
+					bits.difficulty = (bits.difficulty + 1) % 3;
+				} else if(bits.option == 1) {
+					bits.mode = CONFIGURSCREEN;
 					changeMenuState(&tela, 9);
-				} else if(option == 2) {
-					lastMode = mode;
-					mode = NAMING;
+				} else if(bits.option == 2) {
+					bits.lastMode = bits.mode;
+					bits.mode = NAMING;
 					tela.drawColored = 0;
 					tela.menuList[8].state = 0;
-					getInput = 0;
+					bits.getInput = 0;
 				}
 			}
 			break;
 
 			case CONFIGURSCREEN:
 			{
-				changed = 1;
-				if(option == EXIT) {
-					mode = CONFIGUR;
+				bits.changed = 1;
+				if(bits.option == EXIT) {
+					bits.mode = CONFIGUR;
 					changeMenuState(&tela, 8);
 					break;
 				}
 
-				option = doMenuInput(&tela, option, 1, 1);
+				bits.option = doMenuInput(&tela, bits.option, 1, 1);
 
-				if(option == -1)
+				if(bits.option == -1)
 					break;
 
-				if(option == tela.menuList[tela.currentMenu].maxLine - 1) {
-					mode = CONFIGUR;
+				if(bits.option == tela.menuList[tela.currentMenu].maxLine - 1) {
+					bits.mode = CONFIGUR;
 					changeMenuState(&tela, 8);
 					break;
-				} else if(option == 0) {
-					int read = 0;
-					option = 0;
-					while(option != 2) {
+				} else if(bits.option == 0) {
+					int read = 0, stage = 0;
+					while(stage != 2) {
 						system("clear");
-						if(option == 0) {
+						if(stage == 0) {
 							printf("Escreva o comprimento da tela (>=%d):", MINSCREENWIDTH);
 							read = readInt();
 							if(read >= MINSCREENWIDTH && read < 1000) {
 								tela.width = read;
-								option++;
+								stage++;
 							putchar('\n');
 							}
-						} else if(option == 1) {
+						} else if(stage == 1) {
 							printf("Escreva a altura da tela (>=%d):", MINSCREENHEIGHT);
 							read = readInt();
 							if(read >= MINSCREENHEIGHT && read < 1000) {
 								tela.height = read;
-								option++;
+								stage++;
 							}
 							putchar('\n');
 						}
 						read = 0;
 					}
-				} else if(option == 1) {
+				} else if(bits.option == 1) {
 					char read = '\0';
 					int x = tela.width > MINSCREENWIDTH ? tela.width : MINSCREENWIDTH,
 						y = tela.height > MINSCREENHEIGHT ? tela.height : MINSCREENHEIGHT;
@@ -841,17 +854,17 @@ int main()
 				int nameLen = strlen(mapa.entities[0].name);
 				char a = getch();
 				if(a == '\n') {
-					if(lastMode == MAINMENU) {
-						mode = mapa.entities[0].stunned ? BATTLING : MOVINMAP;
+					if(bits.lastMode == MAINMENU) {
+						bits.mode = mapa.entities[0].stunned ? BATTLING : MOVINMAP;
 						changeMenuState(&tela, mapa.entities[0].stunned ? 3 : 0);
 						tela.drawColored = 1;
 					} else {
-						mode = lastMode;
+						bits.mode = bits.lastMode;
 						tela.menuList[8].state = 1;
 					}
 					mapa.entities[0].named = 1;
-					changed = 1;
-					getInput = 1;
+					bits.changed = 1;
+					bits.getInput = 1;
 					putchar('\n');
 					break;
 				} else if(a == ESC) {
@@ -859,147 +872,162 @@ int main()
 						while(kbhit()) getchar();
 						break;
 					}
-					if(lastMode == MAINMENU) {
+					if(bits.lastMode == MAINMENU) {
 						tela.menuList[6].state = 1;
 					} else {
 						tela.menuList[8].state = 1;
 					}
-					mode = lastMode;
+					bits.mode = bits.lastMode;
 					clearArray(mapa.entities[0].name, 21, 1);
-					getInput = 1;
-					changed = 1;
+					bits.getInput = 1;
+					bits.changed = 1;
 					break;
-				} else if(nameLen < 20 && ((a >= 'A' && a <= 'Z') || (a >= 'a' && a <= 'z') || (a >= '0' && a <= '9')) ) {
+				} else if(nameLen < 20 && (a >= ' ' && a <= '~')) {
 					mapa.entities[0].name[nameLen] = a;
 					mapa.entities[0].name[nameLen + 1] = '\0';
-					changed = 1;
+					bits.changed = 1;
 				} else if(a == 127 && nameLen > 0) {
 					mapa.entities[0].name[nameLen - 1] = '\0';
-					changed = 1;
+					bits.changed = 1;
 				}
 			}
 			break;
 
 			case MOVINMAP:
 			{
-				if(option == EXIT) {
-					changed = 1;
-					mode = MAINMENU;
+				if(bits.option == EXIT) {
+					bits.changed = 1;
+					bits.mode = MAINMENU;
 					changeMenuState(&tela, 6);
 					break;
 				}
-				if(option >= UP && option <= LEFT) {
-					moveToSelectedOption(option, &(mapa.entities[0]));
+				if(bits.option >= UP && bits.option <= LEFT) {
+					moveToSelectedOption(bits.option, &(mapa.entities[0]));
 
-					playerMoved = doGameTick(&mapa);
+					bits.playerMoved = doGameTick(&mapa);
 
-					if(playerMoved) {
+					if(bits.playerMoved) {
 						addCurrentHP(&(mapa.entities[0]), 2);
 					}
 
-					if(playerMoved)
-						changed = 1;
-					else if(!messageShown)
-						changed = 1;
+					if(bits.playerMoved)
+						bits.changed = 1;
+					else if(!bits.messageShown)
+						bits.changed = 1;
 
-				} else if (option == Z) {
+				} else if (bits.option == Z) {
 					pickItem(&mapa, &(mapa.entities[0]));
-					changed = 1;
-					playerMoved = 1;
-				} else if (option == X) {
+					bits.changed = 1;
+					bits.playerMoved = 1;
+				} else if (bits.option == X) {
 					changeMenuState(&tela, 1);
-					mode = MAPMENU;
-					changed = 1;
+					bits.mode = MAPMENU;
+					bits.changed = 1;
 				}
 			}
 			break;
 
 			case MAPMENU:
 			{
-				if(option == EXIT) {
-					changed = 1;
-					mode = MOVINMAP;
+				if(bits.option == EXIT) {
+					bits.changed = 1;
+					bits.mode = MOVINMAP;
 					changeMenuState(&tela, 0);
 					break;
 				}
 
-				option = doMenuInput(&tela, option, 1, 1);
-				changed = 1;
-				if(option == -1)
+				bits.option = doMenuInput(&tela, bits.option, 1, 1);
+				bits.changed = 1;
+				if(bits.option == -1)
 					break;
 
-				if(option == tela.menuList[tela.currentMenu].maxLine - 1) {
-					mode = MAINMENU;
+				if(bits.option == tela.menuList[tela.currentMenu].maxLine - 1) {
+					bits.mode = MAINMENU;
 					changeMenuState(&tela, 6);
+					saveMap(&mapa);
+					saveGame(&mapa, &tela, &bits);
 					break;
-				} else if(option == 0) {
+				} else if(bits.option == tela.menuList[tela.currentMenu].maxLine - 2) {
+					bits.mode = MOVINMAP;
+					resetMenuValues(&tela, 1);
+					changeMenuState(&tela, 0);
+					saveMap(&mapa);
+					saveGame(&mapa, &tela, &bits);
+					break;
+				} else if(bits.option == tela.menuList[tela.currentMenu].maxLine - 3) {
+					bits.mode = MOVINMAP;
+					resetMenuValues(&tela, 1);
+					changeMenuState(&tela, 0);
+				} else if(bits.option == 0) {
 					dropItem(&mapa, &(mapa.entities[0]), 1, 1);
-					mode = MOVINMAP;
+					bits.mode = MOVINMAP;
 					resetMenuValues(&tela, 1);
 					changeMenuState(&tela, 0);
-				} else if(option == 1) {
+				} else if(bits.option == 1) {
 					dropItem(&mapa, &(mapa.entities[0]), 2, 1);
-					mode = MOVINMAP;
+					bits.mode = MOVINMAP;
 					resetMenuValues(&tela, 1);
 					changeMenuState(&tela, 0);
-				} else if(option == 2) {
+				} else if(bits.option == 2) {
 					dropItem(&mapa, &(mapa.entities[0]), 0, 1);
-					mode = MOVINMAP;
+					bits.mode = MOVINMAP;
 					resetMenuValues(&tela, 1);
 					changeMenuState(&tela, 0);
-				} else if(option == 3) {
+				} else if(bits.option == 3) {
 					changeMenuState(&tela, 4);
 					mapa.entities[ENTITYLISTSIZE - 1] = mapa.entities[0];
+					mapa.entities[ENTITYLISTSIZE - 1].vampireType = 3;
 					tela.drawColored = 0;
-					mode = UPDATING;
+					bits.mode = UPDATING;
 					putchar('\n');
 					break;
-				} else if(option == 4) {
+				} else if(bits.option == 4) {
 					mapa.entities[ENTITYLISTSIZE - 2] = mapa.entities[0];
+					mapa.entities[ENTITYLISTSIZE - 2].vampireType = 3;
 					changeMenuState(&tela, 10);
-					mode = WATCHING;
+					bits.mode = WATCHING;
 				}
 			}
 			break;
 
 			case BATTLING:
 			{
-				if(option == EXIT)
+				if(bits.option == EXIT)
 					break;
 
-				option = doMenuInput(&tela, option, 1, 0);
-				changed = 1;
-				if(option == -1) {
+				bits.option = doMenuInput(&tela, bits.option, 1, 0);
+				bits.changed = 1;
+				if(bits.option == -1) {
 					break;
 				}
 
-				if(option == tela.menuList[tela.currentMenu].maxLine - 1) {
+				if(bits.option == tela.menuList[tela.currentMenu].maxLine - 1) {
 					if(tela.currentMenu == 3) {
 						resetMenuValues(&tela, 3);
 					}
-					mode = MAINMENU;
+					bits.mode = MAINMENU;
 					changeMenuState(&tela, 6);
 					break;
-				} else if(option == 4) {
-					mapa.entities[battling].functionAI = randomDirection;
-					mapa.entities[battling].level++;
+				} else if(bits.option == 4) {
+					mapa.entities[mapa.entities[0].battling].functionAI = randomDirection;
+					mapa.entities[mapa.entities[0].battling].level++;
 					mapa.entities[0].experience = 0;
-					dontCheckBattleFor = 1;
-					updateEnemyAttr(&(mapa.entities[battling]));
+					bits.dontCheckBattleFor = 1;
+					updateEnemyAttr(&(mapa.entities[mapa.entities[0].battling]));
 					changeMenuState(&tela, 0);
 					clearArray(&(mapa.roundStrings[0][0]), 10 * 41, 0);
-					battling = mapa.entities[0].battling = -1;
-					mode = MOVINMAP;
-				} else if (option != -2) {
+					mapa.entities[0].battling = -1;
+					bits.mode = MOVINMAP;
+				} else if (bits.option != -2) {
 					doGameTick(&mapa);
 
 					clearArray(&(mapa.roundStrings[0][0]), 10 * 41, 0);
-					mapa.entities[0].move = option;
-					mapa.entities[battling].move = getEnemyMove(&(mapa.entities[battling]), &(mapa.entities[0]), configFlags[0]);
-					calculateRoundResult(&(mapa.entities[battling]), &(mapa.entities[0]), &(mapa.roundStrings[0][0]), sizeof(mapa.roundStrings[0]) );
+					mapa.entities[0].move = bits.option;
+					mapa.entities[mapa.entities[0].battling].move = getEnemyMove(&(mapa.entities[mapa.entities[0].battling]), &(mapa.entities[0]), bits.difficulty);
+					calculateRoundResult(&(mapa.entities[mapa.entities[0].battling]), &(mapa.entities[0]), &(mapa.roundStrings[0][0]), sizeof(mapa.roundStrings[0]) );
 
 					if(mapa.entities[0].stunned) {
-						if(!mapa.entities[battling].lostFirst) {
+						if(!mapa.entities[mapa.entities[0].battling].lostFirst) {
 							changeMenuState(&tela, 3);
 						} else {
 							mapa.entities[0].stunned = 0;
@@ -1011,11 +1039,12 @@ int main()
 					if(mapa.entities[0].lostFirst)
 					{
 						clearArray(&(mapa.roundStrings[0][0]), 10 * 41, 0);
-						lives--;
-						if(lives == 0) {
-							mapa.entities[0].battling = battling = -1;
-							mode = LOSTSCREEN;
-							changed = 1;
+						bits.lives--;
+						if(bits.lives == 0) {
+							mapa.entities[0].battling = -1;
+							bits.mode = LOSTSCREEN;
+							bits.changed = 1;
+							tela.drawColored = 0;
 							changeMenuState(&tela, 5);
 							putchar('\n');
 							break;
@@ -1025,48 +1054,49 @@ int main()
 						resetMap(&mapa);
 						mapa.entities[0].level = (curLevel == 1) ? curLevel : (curLevel - 1);
 
-						mode = MOVINMAP;
-						changed = 1;
-						mapa.entities[0].battling = battling = -1;
+						bits.mode = MOVINMAP;
+						bits.changed = 1;
+						mapa.entities[0].battling = -1;
 						resetMenuValues(&tela, 2);
 						changeMenuState(&tela, 0);
 						putchar('\n');
 					}
 
-					if(mapa.entities[battling].lostFirst)
+					if(mapa.entities[mapa.entities[0].battling].lostFirst)
 					{
 						clearArray(&(mapa.roundStrings[0][0]), 10 * 41, 0);
-						if(mapa.entities[battling].potAmount != 0)
-							dropItem(&mapa, &(mapa.entities[battling]), 0, 0);
+						if(mapa.entities[mapa.entities[0].battling].potAmount != 0)
+							dropItem(&mapa, &(mapa.entities[mapa.entities[0].battling]), 0, 0);
 
-						if(mapa.entities[battling].itemListIDS[1] != -1)
-							dropItem(&mapa, &(mapa.entities[battling]), 1, 0);
+						if(mapa.entities[mapa.entities[0].battling].itemListIDS[1] != -1)
+							dropItem(&mapa, &(mapa.entities[mapa.entities[0].battling]), 1, 0);
 
-						if(mapa.entities[battling].itemListIDS[2] != -1)
-							dropItem(&mapa, &(mapa.entities[battling]), 2, 0);
+						if(mapa.entities[mapa.entities[0].battling].itemListIDS[2] != -1)
+							dropItem(&mapa, &(mapa.entities[mapa.entities[0].battling]), 2, 0);
 
 
-						if(mapa.entities[battling].vampireType == 2) {
-							mapa.entities[0].battling = battling = -1;
-							mode = WONSCREEN;
+						if(mapa.entities[mapa.entities[0].battling].vampireType == 2) {
+							mapa.entities[0].battling = -1;
+							bits.mode = WONSCREEN;
+							tela.drawColored = 0;
 							changeMenuState(&tela, 5);
 							putchar('\n');
 							break;
 						}
-						mapa.entities[battling].lostFirst = 0;
-						mapa.entities[battling].alive = 0;
-						mapa.entities[battling].currentHP = 0;
-						mapa.entities[battling].functionAI = deadRising;
-						mapa.entities[0].experience += mapa.entities[battling].level * 1.7;
+						mapa.entities[mapa.entities[0].battling].lostFirst = 0;
+						mapa.entities[mapa.entities[0].battling].alive = 0;
+						mapa.entities[mapa.entities[0].battling].currentHP = 0;
+						mapa.entities[mapa.entities[0].battling].functionAI = deadRising;
+						mapa.entities[0].experience += mapa.entities[mapa.entities[0].battling].level * 1.7;
 						mapa.entities[0].stunned = 0;
 						while(mapa.entities[0].experience >= mapa.entities[0].nextLevel) {
 							mapa.entities[0].experience -= mapa.entities[0].nextLevel;
 							mapa.entities[0].level++;
 							mapa.entities[0].nextLevel += 2;
 						}
-						mode = MOVINMAP;
-						changeRoomState(&mapa, (mapa.mapTiles[mapa.entities[battling].y * mapa.width + mapa.entities[battling].x] & 0xff00) >> 8, 1);
-						mapa.entities[0].battling = battling = -1;
+						bits.mode = MOVINMAP;
+						changeRoomState(&mapa, (mapa.mapTiles[mapa.entities[mapa.entities[0].battling].y * mapa.width + mapa.entities[mapa.entities[0].battling].x] & 0xff00) >> 8, 1);
+						mapa.entities[0].battling = -1;
 						resetMenuValues(&tela, 2);
 						changeMenuState(&tela, 0);
 						putchar('\n');
@@ -1077,41 +1107,42 @@ int main()
 
 			case UPDATING:
 			{
-				if(option == EXIT) {
+				if(bits.option == EXIT) {
 					tela.drawColored = 1;
-					changed = 1;
-					mode = MOVINMAP;
+					bits.changed = 1;
+					bits.mode = MOVINMAP;
 					resetMenuValues(&tela, 4);
 					changeMenuState(&tela, 0);
 				} else {
-					option = doMenuInput(&tela, option, 1, 0);
-					changed = 1;
-					if(option == -1)
+					bits.option = doMenuInput(&tela, bits.option, 1, 0);
+					bits.changed = 1;
+					if(bits.option == -1)
 						continue;
 
-					if(option == tela.menuList[tela.currentMenu].maxLine - 1) {
+					if(bits.option == tela.menuList[tela.currentMenu].maxLine - 1) {
 						tela.drawColored = 1;
-						mode = MOVINMAP;
+						bits.mode = MOVINMAP;
 						mapa.entities[0] = mapa.entities[ENTITYLISTSIZE - 1];
+						mapa.entities[0].vampireType = 1;
 						resetMenuValues(&tela, 4);
 						changeMenuState(&tela, 0);
-					} else if(option == 0) {
+					} else if(bits.option == 0) {
 						mapa.entities[ENTITYLISTSIZE - 1].maxHP += HPATTRSCALE;
 						mapa.entities[ENTITYLISTSIZE - 1].currentHP += HPATTRSCALE;
 						mapa.entities[ENTITYLISTSIZE - 1].spentPoints++;
-					} else if(option == 1) {
+					} else if(bits.option == 1) {
 						mapa.entities[ENTITYLISTSIZE - 1].atkDamage += ADATTRSCALE;
 						mapa.entities[ENTITYLISTSIZE - 1].spentPoints++;
-					} else if(option == 2) {
+					} else if(bits.option == 2) {
 						mapa.entities[ENTITYLISTSIZE - 1].lifeSteal += LIFESTEALATTRSCALE;
 						mapa.entities[ENTITYLISTSIZE - 1].spentPoints++;
-					} else if(option == 3) {
+					} else if(bits.option == 3) {
 						mapa.entities[ENTITYLISTSIZE - 1].precision += PRECISATTRSCALE;
 						if(mapa.entities[ENTITYLISTSIZE - 1].precision >= 100) {
 							mapa.entities[ENTITYLISTSIZE - 1].precision = 100;
 						}
 						mapa.entities[ENTITYLISTSIZE - 1].spentPoints++;
-					} else if(option == 4) {
+					} else if(bits.option == 4) {
 						mapa.entities[ENTITYLISTSIZE - 1] = mapa.entities[0];
 					}
 				}
@@ -1121,48 +1152,51 @@ int main()
 			case WONSCREEN:
 			case LOSTSCREEN:
 			{
-				if(option == EXIT) {
-					running = 0;
+				if(bits.option == EXIT) {
+					bits.running = 0;
 					break;
 				}
 
-				option = doMenuInput(&tela, option, 1, 1);
-				changed = 1;
+				bits.option = doMenuInput(&tela, bits.option, 1, 1);
+				bits.changed = 1;
 
-				if(option == -1)
+				if(bits.option == -1)
 					break;
 
-				if(option == 0) {
+				if(bits.option == 0) {
 					resetMap(&mapa);
-					mode = MOVINMAP;
-					lives = 5;
+					bits.mode = MOVINMAP;
+					bits.lives = 5;
 					changeMenuState(&tela, 0);
 					resetMenuValues(&tela, 5);
-				} else if(option == 1) {
-					mode = MOVINMAP;
-					changeMenuState(&tela, 0);
+					tela.drawColored = 1;
+				} else if(bits.option == 1) {
+					bits.mode = MOVINMAP;
 					resetMenuValues(&tela, 5);
 					startVampire(&player);
-					lives = 5;
+					bits.lives = 5;
 					freeAll(&mapa, &tela);
 					clearScreen(&tela);
 					clearMap(&mapa);
 					addVampToMap(player, &mapa);
 					populateMap(&mapa);
-				} else if(option == 2) {
-					mode = MAINMENU;
+					changeMenuState(&tela, 0);
+					tela.drawColored = 1;
+				} else if(bits.option == 2) {
+					bits.mode = MAINMENU;
+					resetMenuValues(&tela, 5);
+					startVampire(&player);
+					bits.lives = 5;
+					freeAll(&mapa, &tela);
+					clearScreen(&tela);
+					clearMap(&mapa);
+					addVampToMap(player, &mapa);
+					populateMap(&mapa);
 					changeMenuState(&tela, 6);
-					resetMenuValues(&tela, 5);
-					startVampire(&player);
-					lives = 5;
-					freeAll(&mapa, &tela);
-					clearScreen(&tela);
-					clearMap(&mapa);
-					addVampToMap(player, &mapa);
-					populateMap(&mapa);
+					tela.drawColored = 1;
 					break;
-				} else if(option == 3) {
-					running = 0;
+				} else if(bits.option == 3) {
+					bits.running = 0;
 					break;
 				}
 			}
@@ -1170,15 +1204,15 @@ int main()
 
 			case WATCHING:
 			{
-				if(option == EXIT || option == X || option == Z) {
-					mode = MOVINMAP;
+				bits.changed = 1;
+				if(bits.option == EXIT || bits.option == X || bits.option == Z) {
+					bits.mode = MOVINMAP;
 					changeMenuState(&tela, 0);
-					changed = 1;
 					break;
-				} else if(option >= UP && option <= LEFT) {
-					moveToSelectedOption(option, &(mapa.entities[ENTITYLISTSIZE - 2]));
+				} else if(bits.option >= UP && bits.option <= LEFT) {
+					moveToSelectedOption(bits.option, &(mapa.entities[ENTITYLISTSIZE - 2]));
 
-					moveVamp(&(mapa.entities[ENTITYLISTSIZE - 2]), &mapa);
+					bits.playerMoved = moveVamp(&(mapa.entities[ENTITYLISTSIZE - 2]), &mapa);
 				}
 			}
 			break;
@@ -1195,31 +1229,35 @@ int main()
 																GAME FUNCTIONS
 *************************************************************************************************************************************************/
 
-void startGame(map *mapa, ptr_vampire player, screen *tela, keyboard *teclado)
+void startGame(map *mapa, ptr_vampire player, screen *tela, keyboard *teclado, config *bits)
 {
 	/* Inicia o jogador */
 	player->vampireType = 1;
 	startVampire(player);
-	player->x = player->y = 5;
 	player->xStart = player->x;
 	player->yStart = player->y;
 
 	/* Inicia a tela */
 	startScreen(tela);
 
+	getItemAt(0xff00ff00);
+
 	/* Inicia o mapa */
 	if(!existsValidFile("mapa.txt")) {
 		startMap(mapa);
 		addVampToMap(*player, mapa);
 		populateMap(mapa);
+		saveMap(mapa);
 	} else {
 		startMap(mapa);
 		addVampToMap(*player, mapa);
 		readMap(mapa);
-		printf("%p\n", mapa->entities[1].functionAI);
-		getchar();
+		if(!existsValidFile("jogo.bin")) {
+			distributeItemsVampsNMap(mapa);
+		} else {
+			readGame(mapa, tela, bits);
+		}
 	}
-	getItemAt(0xffffffff);
 
 	keyboard tecladoPadrao = {
 	.keys = {	{ESC, '[', CUP},
@@ -1234,6 +1272,80 @@ void startGame(map *mapa, ptr_vampire player, screen *tela, keyboard *teclado)
 	.keyParts = {3, 3, 3, 3, 1, 1, 1, 1}};
 
 	*teclado = tecladoPadrao;
+}
+
+void saveGame(map *mapa, screen *tela, config *bits)
+{
+	FILE *file = fopen("jogo.bin", "wb");
+	if(file == NULL)
+		return;
+	fwrite(&(mapa->width), MAPLENGHTTILLARRAYS - sizeof(void *), 1, file);
+	fwrite(&(mapa->entities[0]), sizeof(vampire), mapa->_entitiesAmount, file);
+	fwrite(&(mapa->doorList[0]), sizeof(door), mapa->_doorAmount, file);
+	fwrite(&(mapa->roomList[1]), sizeof(room), mapa->currentRoom, file);
+	fwrite(&(mapa->itemList[0]), sizeof(usable), mapa->_usablesAmount + mapa->maxItemsOffset, file);
+	int i = 0;
+	for(i = 1;i <= mapa->_roomAmount;i++) {
+		fwrite(&(mapa->roomList[i].doorListIDs[0]), sizeof(int), mapa->roomList[i]._doorAmount, file);
+	}
+	fwrite(&(tela->currentMenu), sizeof(int), 4, file);
+	for(i = 0;i < MENUSAMOUNT;i++) {
+		fwrite(&(tela->menuList[i].curLine), sizeof(int), 2, file);
+	}
+	char A = 0, B = 1, C = 2;
+	for(i = 0;i < mapa->_entitiesAmount;i++) {
+		fwrite(((mapa->entities[i].functionAI == NULL) ? &A : (mapa->entities[i].functionAI == randomDirection ? &B : &C)), sizeof(char), 1, file);
+	}
+	fwrite(bits, sizeof(config), 1, file);
+	fclose(file);
+}
+
+void readGame(map *mapa, screen *tela, config *bits)
+{
+	FILE *file = fopen("jogo.bin", "rb");
+	if(file == NULL)
+		return;
+	int values[2];
+	fread(values, sizeof(int), 2, file);
+	if(mapa->width == values[0] && mapa->height == values[1]) {
+		mapa->width = values[0];
+		mapa->height = values[1];
+	} else {
+		printf("%d =/= %d           %d =/= %d\nERRO! ARQUIVOS mapa.txt E jogo.bin NAO SAO COMPATIVEIS\nREINCIANDO JOGO A PARTIR DO MAPA PADRAO\n", mapa->width, values[0], mapa->height, values[1]);
+		getchar();
+		distributeItemsVampsNMap(mapa);
+		return;
+	}
+	fread(&(mapa->offsetRight), MAPLENGHTTILLARRAYS - sizeof(void *) - (2 * sizeof(int)), 1, file);
+	fread(&(mapa->entities[0]), sizeof(vampire), mapa->_entitiesAmount, file);
+	fread(&(mapa->doorList[0]), sizeof(door), mapa->_doorAmount, file);
+	fread(&(mapa->roomList[1]), sizeof(room), mapa->currentRoom, file);
+	fread(&(mapa->itemList[0]), sizeof(usable), mapa->_usablesAmount + mapa->maxItemsOffset, file);
+	int i = 0;
+	for(i = 1;i <= mapa->_roomAmount;i++) {
+		mapa->roomList[i].doorListIDs = malloc(mapa->roomList[i].doorListSize * sizeof(int));
+		fread(&(mapa->roomList[i].doorListIDs[0]), sizeof(int), mapa->roomList[i]._doorAmount, file);
+	}
+	fread(&(tela->currentMenu), sizeof(int), 4, file);
+	for(i = 0;i < MENUSAMOUNT;i++) {
+		fread(&(tela->menuList[i].curLine), sizeof(int), 2, file);
+	}
+	char A = 0;
+	for(i = 0;i < mapa->_entitiesAmount;i++) {
+		fread(&A, sizeof(char), 1, file);
+		if(A == 0)
+			mapa->entities[i].functionAI = NULL;
+		else if(A == 1)
+			mapa->entities[i].functionAI = randomDirection;
+		else if(A == 2)
+			mapa->entities[i].functionAI = deadRising;
+	}
+	fread(bits, sizeof(config), 1, file);
+	fclose(file);
+	bits->changed = 1;
+	bits->getInput = 1;
+	bits->mode = MAINMENU;
+	changeMenuState(tela, 6);
 }
 
 int doGameTick(map* mapa)
@@ -1855,6 +1967,7 @@ void startMap(map *mapa)
 	mapa->deltaCorridorLenght = 5;
 	mapa->maxRooms = 50;
 	mapa->maxItems = 5;
+	mapa->currentRoom = 1;
 	mapa->ticksTillComeBack = 5;
 	mapa->maxItemsOffset = 0;
 	mapa->maxTurnsWithFew = 10;
@@ -1892,22 +2005,6 @@ void clearMap(map* mapa)
 
 	memset(mapa->entities, 0, sizeof(mapa->entities));
 	memset(mapa->itemList, 0, sizeof(mapa->itemList));
-
-	mapa->mapTiles = malloc((mapa->width * mapa->height) * 2);
-
-	int i = 0, j = 0;
-	for(;i < 2;i++) {
-		for(j = 0;j < mapa->width;j++) {
-			(mapa->mapTiles)[(i * (mapa->height - 1) * mapa->width) + j] = WALLTILE | 0xff00;
-		}
-	}
-
-	for(j = 0; j < 2;j++) {
-		for(i = 1; i < mapa->height - 1;i++) {
-			(mapa->mapTiles)[i * mapa->width + (j * (mapa->width - 1))] = WALLTILE | 0xff00;
-		}
-	}
-
 	memset(mapa->doorList, 0, 600 * sizeof(door));
 
 	mapa->_roomAmount = 0;
@@ -1916,10 +2013,6 @@ void clearMap(map* mapa)
 
 void populateMap(map *mapa)
 {
-	char fileName[15];
-	sprintf(fileName, "logs/log%d.txt", runNumber);
-	FILE *log = fopen(fileName, "w");
-
 	mapa->mapTiles = malloc((mapa->width * mapa->height) * 2);
 
 	int i = 1, j = 1, k = 0;
@@ -1927,20 +2020,16 @@ void populateMap(map *mapa)
 		for(j = 0;j < mapa->width;j++) {
 			(mapa->mapTiles)[(i * (mapa->height - 1) * mapa->width) + j] = (WALLTILE | 0xff00);
 		}
-	}
-	for(j = 0; j < 2;j++) {
-		for(i = 1; i < mapa->height - 1;i++) {
-			(mapa->mapTiles)[i * mapa->width + (j * (mapa->width - 1))] = (WALLTILE | 0xff00);
+		for(j = 1;j < mapa->height - 1;j++) {
+			(mapa->mapTiles)[(j * mapa->width) + (i * (mapa->width - 1))] = (WALLTILE | 0xff00);
 		}
 	}
 
-	fprintf(log, "0\n");
-	for(i = 0;i < mapa->height - 1; i++) {
+	for(i = 1;i < mapa->height - 1; i++) {
 		for(j = 1;j < mapa->width - 1; j++) {
 			(mapa->mapTiles)[i * mapa->width + j] = (WALLTILE | 0x0080);
 		}
 	}
-	fprintf(log, "0\n");
 
 	ptr_vampire player = &(mapa->entities[0]);
 	int tilesAmount = mapa->minRoomTiles + (rand() % mapa->deltaRoomTiles);
@@ -1950,12 +2039,10 @@ void populateMap(map *mapa)
 	mapa->mapTiles[player->y * mapa->width + player->x] = EMPTYTILE | 0x0100;
 	generateRoom(mapa, player->x, player->y, tilesAmount, randomWeightedAvarage(4, weights), 1);
 
-	fprintf(log, "0\n");
 	int genResult = 0;
 	door *hold = NULL;
 	for(mapa->workingDoorIndex = 0;mapa->workingDoorIndex < mapa->_doorAmount; mapa->workingDoorIndex++)
 	{
-		fprintf(log, "1->");
 		if(mapa->currentRoom >= mapa->maxRooms) {
 			mapa->doorList[mapa->workingDoorIndex].state = 2;
 			continue;
@@ -1982,26 +2069,21 @@ void populateMap(map *mapa)
 				hold->state = 1;
 		}
 	}
-	fprintf(log, "0\n");
 
 
 	int holdInt = 0;
 	for(i = 0;i < mapa->_doorAmount;i++) {
-		fprintf(log, "2->");
 		if(mapa->doorList[i].state == 2  && mapa->doorList[i].prevRoom > mapa->doorList[i].nextRoom) {
 			holdInt = mapa->doorList[i].prevRoom;
 			mapa->doorList[i].prevRoom = mapa->doorList[i].nextRoom;
 			mapa->doorList[i].nextRoom = holdInt;
 		}
 	}
-
-	fprintf(log, "0\n");
 	mapa->roomList[1].roomsToStart = 0;
 
 	room *sala = NULL;
 	door *porta = NULL;
 	for(j = 0;j < mapa->_roomAmount/12;j++) {
-		fprintf(log, "3->");
 		for(i = 1;i <= mapa->_roomAmount;i++) {
 			sala = &(mapa->roomList[i]);
 			if(sala == NULL) continue;
@@ -2023,44 +2105,36 @@ void populateMap(map *mapa)
 			sala->level = sala->roomsToStart;
 		}
 	}
-	fprintf(log, "0\n");
 
 	changeRoomState(mapa, 1, 1);
 
-	fprintf(log, "0\n");
 	int highestRoomsToStart = 0, lastRoomPos = 0;
 	for (i = 1; i <= mapa->_roomAmount; i++)
 	{
-		fprintf(log, "4->");
 		sala = &mapa->roomList[i];
 		if(sala == NULL) continue;
 		if(sala->state == 2) continue;
-		if(sala->roomsToStart > highestRoomsToStart) {
+		if(sala->roomsToStart >= highestRoomsToStart) {
 			highestRoomsToStart = sala->roomsToStart;
 			lastRoomPos = i;
 		}
 	}
 	
-	fprintf(log, "0\n");
 	sala = &(mapa->roomList[lastRoomPos]);
 	k = sala->level;
 	sala->level *= 2.5;
 	j = sala->level;
 	for(i = 1; i <= mapa->_roomAmount; i++) {
-		fprintf(log, "5->");
 		sala = &(mapa->roomList[i]);
 		if(sala == NULL) continue;
 		if(sala->state == 2 || sala->level == 1) continue;
 		sala->level = (((float)sala->level / k) * j) * 0.856;
 	}
 
-	fprintf(log, "0\n");
-	usable item = {};
 	vampire vamp = {};
 	/* GENERATES ENEMIES */
 	int xd = 0, yd = 0;
 	for(i = 2;i <= mapa->_roomAmount;i++) {
-		fprintf(log, "6->");
 		sala = &(mapa->roomList[i]);
 		if(sala == NULL) continue;
 		if(sala->state == 2) continue;
@@ -2070,6 +2144,9 @@ void populateMap(map *mapa)
 			if(porta->state == 2) continue;
 			yd = porta->doorDirection == UP ? -1 : porta->doorDirection == DOWN ? 1 : 0;
 			xd = porta->doorDirection == LEFT ? -1 : porta->doorDirection == RIGHT ? 1 : 0;
+			int turn = ((mapa->mapTiles[ (porta->y + yd) * mapa->width + porta->x + xd ] & 0xff00) >> 8 ) == sala->id ? 1 : -1;
+			xd *= turn;
+			yd *= turn;
 			if(((mapa->mapTiles[ (porta->y + yd) * mapa->width + porta->x + xd ] & 0xff00) >> 8 ) == sala->id) {
 				vamp.named = 0;
 				vamp.vampireType = lastRoomPos == i ? 2 : 0;
@@ -2078,49 +2155,13 @@ void populateMap(map *mapa)
 				updateEnemyAttr(&vamp);
 				vamp.xStart = vamp.x = porta->x + xd;
 				vamp.yStart = vamp.y = porta->y + yd;
-				if(vamp.level > 1) {
-					k = 0;
-					while((rand() % 30 <= vamp.level) && k < 3) {
-						item = getRandomItemOfType(k);
-						if(k == 0) {
-							vamp.itemListIDS[0] = item.id;
-							vamp.potAmount = rand() % 4;
-						} else {
-							vamp.itemListIDS[k] = item.id;
-							vamp.atkDamage += item.damage;
-							vamp.maxHP += item.hp;
-							vamp.currentHP += item.hp;
-							vamp.lifeSteal += item.lifeSteal;
-						}
-						k++;
-					}
-				}
 				addVampToMap(vamp, mapa);
 				break;
-			}
+			} 
 		}
 	}
-
-	fprintf(log, "0\n");
-	/* GENERATE ITEMS */
-	for(i = 0;i < mapa->maxItems;) {
-		fprintf(log, "7->");
-		xd = (rand() % (mapa->width - 2)) + 1;
-		yd = (rand() % (mapa->height - 2)) + 1;
-		short holdShort = mapa->mapTiles[yd * mapa->width + xd];
-		if((holdShort & 0xff00) == 0 || (holdShort & 0xff00) == 0xff00 || mapa->roomList[(holdShort & 0xff00) >> 8].level == 1) continue;
-		if((holdShort & 0x007f) == EMPTYTILE) {
-			int weights[3] = {14, 8, 8};
-			item = getRandomItemOfType( randomWeightedAvarage(3, weights) );
-			item.state = 1;
-			item.x = xd;
-			item.y = yd;
-			addItemToMap(item, mapa);
-			i++;
-		}
-	}
-	fprintf(log, "0\n");
-	fclose(log);
+	
+	distributeItemsVampsNMap(mapa);
 }
 
 int generateRoom(map *mapa, int x, int y, int roomSize, int roomDirection, int seen)
@@ -2355,20 +2396,33 @@ void changeRoomState(map* mapa, int roomID, int state)
 
 int isPassable(short tile, char type)
 {
-	char c = tile & 0x0007f;
-
-	switch(c) {
+	if(type == 3) {
+		return 1;
+	}
+	switch(tile & 0x0007f) {
 		case WALLTILE:
 			return 0;
 
-		case '+':
+		case CLOSEDDOOR:
 			return 0;
 
-		case '-':
-			return type & 0x01;
+		case OPENDOOR:
+			return type & 0x1;
 	}
 
 	return 1;
+}
+
+door getDoorAtRoom(map *mapa, int x, int y, int roomID)
+{
+	int i = 0;
+	door porta = {};
+	for(;i < mapa->roomList[roomID]._doorAmount;i++) {
+		porta = mapa->doorList[ mapa->roomList[roomID].doorListIDs[i] ];
+		if(porta.x == x && porta.y == y)
+			return porta;
+	}
+	return mapa->doorList[0];
 }
 
 /*************************************************************************************************************************************************
@@ -2383,10 +2437,34 @@ void readMap(map *mapa)
 
 	fscanf(mapFile ," %d %d", &mapa->width, &mapa->height);
 	if(mapa->width < 0) {
+		mapa->width = mapa->height;
+		fscanf(mapFile, " %d", &mapa->height);
+		mapa->mapTiles = malloc(mapa->height * mapa->width * sizeof(short));
+		unsigned int a = 0, i = 0, j = 0;
+		char b = 0;
+		for(i = 0;i < mapa->height;i++) {
+			for(j = 0;j < mapa->width;j++) {
+				fscanf(mapFile, " %d%c", &a, &b);
+				mapa->mapTiles[i * mapa->width + j] = b;
+				mapa->mapTiles[i * mapa->width + j] |= (a << 8);
+			}
+			fgetc(mapFile);
+		}
+
+		fscanf(mapFile, " %d %d", &mapa->entities[0].xStart, &mapa->entities[0].yStart);
+		fgetc(mapFile);
+		mapa->entities[0].level = 1;
+		fscanf(mapFile, " %d", &mapa->_entitiesAmount);
+		for(i = 1;i < mapa->_entitiesAmount;i++) {
+			fscanf(mapFile, " %d %d %d", &mapa->entities[i].xStart, &mapa->entities[i].yStart, &mapa->entities[i].level);
+			mapa->entities[i].x = mapa->entities[i].xStart;
+			mapa->entities[i].y = mapa->entities[i].yStart;
+			mapa->roomList[ (mapa->mapTiles[mapa->entities[i].y * mapa->width + mapa->entities[i].x] & 0xff00) >> 8 ].level = mapa->entities[i].level;
+		}
 
 	} else {
 		mapa->mapTiles = malloc(mapa->width * mapa->height * sizeof(short));
-		int i = 0;
+		int i = 0, j = 0;
 		char c = 0;
 		while(i < mapa->width * mapa->height) {
 			c = fgetc(mapFile);
@@ -2396,12 +2474,25 @@ void readMap(map *mapa)
 			mapa->mapTiles[i] = c;
 			i++;
 		}
+		
+		for(i = 0; i < 2;i++) {
+			for(j = 0;j < mapa->width;j++) {
+				mapa->mapTiles[i * (mapa->height - 1) * mapa->width + j] |= 0xff00;
+			}
+			for(j = 1;j < mapa->width - 1;j++) {
+				mapa->mapTiles[j * mapa->width + (i * (mapa->width - 1))] |= 0xff00;
+			}
+		}
+
 		fgetc(mapFile);
-		fscanf(mapFile, " %d %d", &(mapa->entities[0].x), &(mapa->entities[0].y) );
+		fscanf(mapFile, " %d %d", &(mapa->entities[0].x), &(mapa->entities[0].y));
+		mapa->entities[0].xStart = mapa->entities[0].x;
+		mapa->entities[0].yStart = mapa->entities[0].y;
+		fillMap(mapa, mapa->entities[0].x, mapa->entities[0].y);
 		fscanf(mapFile, " %d", &i);
-		int j = 0;
 		int x, y, level;
-		for(;j < i;j++) {
+		int highestLevel = 0, highLevelIndex = 0;
+		for(j = 0;j <= i;j++) {
 			mapa->entities[ENTITYLISTSIZE - 3].vampireType = 0;
 			mapa->entities[ENTITYLISTSIZE - 3].named = 0;
 			startVampire(&(mapa->entities[ENTITYLISTSIZE - 3]));
@@ -2409,35 +2500,19 @@ void readMap(map *mapa)
 
 			fscanf(mapFile, " %d %d %d", &x, &y, &level);
 
-			if(x >= 0 && x < mapa->width && y >= 0 && y < mapa->height) {
-				mapa->entities[ENTITYLISTSIZE - 3].x = x;
-				mapa->entities[ENTITYLISTSIZE - 3].y = y;
-				mapa->entities[ENTITYLISTSIZE - 3].level = level;
-
-				addVampToMap(mapa->entities[ENTITYLISTSIZE - 3], mapa);
-			}
-		}
-		mapa->entities[ENTITYLISTSIZE - 3].vampireType = 2;
-		mapa->entities[ENTITYLISTSIZE - 3].named = 0;
-		startVampire(&(mapa->entities[ENTITYLISTSIZE - 3]));
-		mapa->entities[ENTITYLISTSIZE - 3].alive = 1;
-
-		fscanf(mapFile, " %d %d %d", &x, &y, &level);
-		
-		if(x >= 0 && x < mapa->width && y >= 0 && y < mapa->height) {
-			mapa->entities[ENTITYLISTSIZE - 3].x = x;
-			mapa->entities[ENTITYLISTSIZE - 3].y = y;
+			mapa->entities[ENTITYLISTSIZE - 3].x = mapa->entities[ENTITYLISTSIZE - 3].xStart = x;
+			mapa->entities[ENTITYLISTSIZE - 3].y = mapa->entities[ENTITYLISTSIZE - 3].yStart = y;
 			mapa->entities[ENTITYLISTSIZE - 3].level = level;
+			mapa->roomList[ (mapa->mapTiles[y * mapa->width + x] & 0xff00) >> 8 ].level = level;
+			if(level > highestLevel) {
+				highestLevel = level;
+				highLevelIndex = mapa->_entitiesAmount;
+			}
+			updateEnemyAttr(&(mapa->entities[ENTITYLISTSIZE - 3]));
 
 			addVampToMap(mapa->entities[ENTITYLISTSIZE - 3], mapa);
 		}
-	}
-	int i = 0, j = 0;
-	for(;i < mapa->height;i++) {
-		for(j = 0;j < mapa->width;j++) {
-			printf("%c", mapa->mapTiles[i * mapa->width + j]);
-		}
-		putchar('\n');
+		mapa->entities[highLevelIndex].vampireType = 2;
 	}
 
 	fclose(mapFile);
@@ -2445,7 +2520,22 @@ void readMap(map *mapa)
 
 void saveMap(map *mapa)
 {
-
+	FILE *mapFile = fopen("mapa.txt", "w");
+	if(mapFile == NULL) 
+		return;
+	fprintf(mapFile, "-1 %d %d\n", mapa->width, mapa->height);
+	int i = 0, j = 0;
+	for(;i < mapa->height;i++) {
+		for(j = 0;j < mapa->width;j++) {
+			fprintf(mapFile, " %d%c", (mapa->mapTiles[i * mapa->width + j] & 0xff00) >> 8, mapa->mapTiles[i * mapa->width + j] & 0x00ff);
+		}
+		fputc('\n', mapFile);
+	}
+	fprintf(mapFile, "%d %d\n%d\n", mapa->entities[0].xStart, mapa->entities[0].yStart, mapa->_entitiesAmount);
+	for(i = 1;i < mapa->_entitiesAmount;i++) {
+		fprintf(mapFile, "%d %d %d\n", mapa->entities[i].xStart, mapa->entities[i].yStart, mapa->roomList[ (mapa->mapTiles[mapa->entities[i].y * mapa->width + mapa->entities[i].x] & 0xff00) >> 8 ].level);
+	}
+	fclose(mapFile);
 }
 
 void readItemList(usable **itemList, int *size)
@@ -2526,15 +2616,103 @@ void readItemList(usable **itemList, int *size)
 		}
 		fclose(file);
 	}
+}
 
+void fillMap(map *mapa, int x, int y)
+{
+	room *sala = &(mapa->roomList[mapa->currentRoom]);
+	sala->id = mapa->currentRoom;
+	sala->_doorAmount = 0;
+	sala->doorListSize = 0;
+	sala->roomsToStart = 0;
+	sala->doorListIDs = NULL;
+	sala->state = 0;
+	mapa->_roomAmount++;
+	fillRoom(mapa, x, y, 1);
+	door *porta = NULL;
+	mapa->currentRoom++;
+	int i = 0, xd = 0, yd = 0;
+	for(i = 0;i < mapa->_doorAmount;i++) {
+		porta = &(mapa->doorList[i]);
+		if(porta->doorDirection == RIGHT) {
+			porta->doorDirection = ((mapa->mapTiles[porta->y * mapa->width + porta->x - 1] & 0xff00) >> 8) == porta->prevRoom ? RIGHT : LEFT;
+		} else {
+			porta->doorDirection = ((mapa->mapTiles[(porta->y - 1) * mapa->width + porta->x] & 0xff00) >> 8) == porta->prevRoom ? DOWN : UP;
+		}
+		sala = &(mapa->roomList[mapa->currentRoom]);
+		sala->id = mapa->currentRoom;
+		sala->_doorAmount = 0;
+		sala->doorListSize = 0;
+		sala->doorListIDs = NULL;
+		sala->state = 0;
+		addDoorToRoom(*porta, sala);
+		xd = porta->doorDirection == RIGHT ? 1 : porta->doorDirection == LEFT ? -1 : 0;
+		yd = porta->doorDirection == DOWN ? 1 : porta->doorDirection == UP ? -1 : 0;
+		if((mapa->mapTiles[(porta->y + yd) * mapa->width + porta->x + xd] & 0xff00) != 0) {
+			porta->nextRoom = (mapa->mapTiles[(porta->y + yd) * mapa->width + porta->x + xd] & 0xff00) >> 8;
+			addDoorToRoom(*porta, &(mapa->roomList[ (mapa->mapTiles[(porta->y + yd) * mapa->width + porta->x + xd] & 0xff00) >> 8 ]) );
+			continue;
+		}
+		porta->nextRoom = mapa->currentRoom;
+		fillRoom(mapa, porta->x + xd, porta->y + yd, mapa->currentRoom);
+		mapa->_roomAmount++;
+		mapa->currentRoom++;
+	}
+	changeRoomState(mapa, 1, 1);
+}
+
+void fillRoom(map *mapa, int x, int y, int level)
+{
+	/* Tirar dos comentarios se quiser acompanhar o preenchimento do mapa */
 	/*
-	printf("%d\n", (*size));
-	int i = 0;
-	for(;i < (*size);i++) {
-		printf("%s: %d, %d, %d, %d\n", (*itemList)[i].name, (*itemList)[i].id, (*itemList)[i].hp, (*itemList)[i].damage, (*itemList)[i].lifeSteal);
+	system("clear");
+	int k = 0, l = 0;
+	for(;k < mapa->height;k++) {
+		for(l = 0;l < mapa->width;l++) {
+			if(x == l && y == k)
+				printf("\x1B[7m%c\x1B[0m", mapa->mapTiles[k * mapa->width + l]);
+			else {
+				if((mapa->mapTiles[k * mapa->width + l] & 0xff00) == 0)
+					printf("%c", mapa->mapTiles[k * mapa->width + l]);
+				else {
+					printf("\x1B[%dm%c\x1B[0m", 41 + (((mapa->mapTiles[k * mapa->width + l] & 0xff00) >> 8) % 7), mapa->mapTiles[k * mapa->width + l]);
+				}
+			}
+		}
+		putchar('\n');
 	}
 	getchar();
 	*/
+
+	mapa->mapTiles[y * mapa->width + x] |= (level << 8);
+	short tile = mapa->mapTiles[y * mapa->width + x];
+	if((tile & 0x007f) == OPENDOOR || (tile & 0x007f) == CLOSEDDOOR) {
+		door porta = {};
+		porta.x = x;
+		porta.y = y;
+		porta.doorDirection = (mapa->mapTiles[y * mapa->width + x - 1] & 0x007f) == EMPTYTILE ? RIGHT : UP;
+		porta.state = 0;
+		if((tile & 0x007f) == OPENDOOR)
+			mapa->mapTiles[y * mapa->width + x] = (tile & 0xff00) | CLOSEDDOOR;
+		porta.prevRoom = level;
+		porta.nextRoom = -1;
+		addDoorToMap(&porta, mapa);
+		addDoorToRoom(porta, &(mapa->roomList[mapa->currentRoom]));
+		return;
+	} else if((tile & 0x007f) == WALLTILE) {
+		return;
+	}
+
+	int i = -1, j = -1;
+	for(;i < 2;i++) {
+		for(j = -1;j < 2;j++) {
+			if(!(j == 0 && i == 0) && x + j >= 0 && x + j < mapa->width && y + i >= 0 && y + i < mapa->height && (mapa->mapTiles[(y + i) * mapa->width + x + j] & 0xff00) >> 8 == 0) {
+				if(abs(i) == 1 && abs(j) == 1 && (mapa->mapTiles[(y + i) * mapa->width + x] & 0x007f) == WALLTILE && (mapa->mapTiles[(y) * mapa->width + x + j] & 0x007f) == WALLTILE && (mapa->mapTiles[(y + i) * mapa->width + x + j] & 0x007f) == EMPTYTILE)
+					continue;
+				fillRoom(mapa, x + j, y + i, level);
+			}
+		}
+	}
 }
 
 /*************************************************************************************************************************************************
@@ -2633,7 +2811,8 @@ void freeAll(map *mapa, screen *tela)
 		free(tela->helpScroll.pageList[i]);
 	}
 
-	getItemAt(0xfffffffe);
+	getItemAt(0xff00ff01);
+
 }
 
 /*************************************************************************************************************************************************
@@ -2736,7 +2915,6 @@ void resetMenuValues(screen *tela, int menuIndex)
 {
 	arrowMenu *menu = &(tela->menuList[menuIndex]);
 	menu->curLine = 0;
-	menu->drewLines = 0;
 }
 
 /*************************************************************************************************************************************************
@@ -2879,7 +3057,6 @@ void clearScreen(screen *tela)
 	menu->x = -2;
 	menu->y = 1;
 	menu->width = 0;
-	menu->lineOffset = 0;
 	menu->changeState[0] = -2;
 	menu->maxLine = 0;
 	setArrow(menu, "");
@@ -2894,7 +3071,6 @@ void clearScreen(screen *tela)
 	menu->x = -2;
 	menu->y = 1;
 	menu->width = 0;
-	menu->lineOffset = 0;
 	menu->changeState[0] = 0;
 	menu->changeState[1] = 4;
 	menu->maxLine = 0;
@@ -2905,6 +3081,7 @@ void clearScreen(screen *tela)
 	addLine(menu, "Distribuir pontos");
 	addLine(menu, "Vasculhar");
 	addLine(menu, "Voltar ao jogo");
+	addLine(menu, "Salvar");
 	addLine(menu, "Menu principal");
 	menu->height = menu->maxLine;
 
@@ -2913,7 +3090,6 @@ void clearScreen(screen *tela)
 	menu->x = -2;
 	menu->y = 1;
 	menu->width = 0;
-	menu->lineOffset = 0;
 	menu->changeState[0] = 0;
 	menu->changeState[1] = 1;
 	menu->changeState[2] = 3;
@@ -2932,7 +3108,6 @@ void clearScreen(screen *tela)
 	menu->x = -2;
 	menu->y = 1;
 	menu->width = 0;
-	menu->lineOffset = 0;
 	menu->changeState[0] = -2;
 	menu->maxLine = 0;
 	setArrow(menu, "->");
@@ -2943,7 +3118,6 @@ void clearScreen(screen *tela)
 	menu = &(tela->menuList[4]);
 	menu->state = 0;
 	menu->width = 0;
-	menu->lineOffset = 0;
 	menu->curLine = 0;
 	menu->changeState[0] = -2;
 	menu->maxLine = 0;
@@ -2961,7 +3135,6 @@ void clearScreen(screen *tela)
 	menu = &(tela->menuList[5]);
 	menu->state = 0;
 	menu->width = 0;
-	menu->lineOffset = 0;
 	menu->curLine = 0;
 	menu->changeState[0] = -2;
 	menu->maxLine = 0;
@@ -2977,12 +3150,12 @@ void clearScreen(screen *tela)
 	menu = &(tela->menuList[6]);
 	menu->state = 0;
 	menu->width = 0;
-	menu->lineOffset = 0;
 	menu->curLine = 0;
 	menu->changeState[0] = -2;
 	menu->maxLine = 0;
 	setArrow(menu, "->");
-	addLine(menu, "Iniciar jogo!");
+	addLine(menu, "Continuar jogo!");
+	addLine(menu, "Novo jogo!");
 	addLine(menu, "Como jogar");
 	addLine(menu, "Opcoes");
 	addLine(menu, "Sair");
@@ -2993,7 +3166,6 @@ void clearScreen(screen *tela)
 	menu = &(tela->menuList[7]);
 	menu->state = 0;
 	menu->width = tela->columnWidth;
-	menu->lineOffset = 0;
 	menu->curLine = 0;
 	menu->changeState[0] = 6;
 	menu->maxLine = 0;
@@ -3009,7 +3181,6 @@ void clearScreen(screen *tela)
 	menu->state = 0;
 	menu->width = 0;
 	menu->x = -1;
-	menu->lineOffset = 0;
 	menu->curLine = 0;
 	menu->changeState[0] = -2;
 	menu->maxLine = 0;
@@ -3028,7 +3199,6 @@ void clearScreen(screen *tela)
 	menu = &(tela->menuList[9]);
 	menu->state = 0;
 	menu->width = 0;
-	menu->lineOffset = 0;
 	menu->curLine = 0;
 	menu->changeState[0] = -2;
 	menu->maxLine = 0;
@@ -3045,7 +3215,6 @@ void clearScreen(screen *tela)
 	menu->x = -2;
 	menu->y = 1;
 	menu->width = 0;
-	menu->lineOffset = 0;
 	menu->curLine = 0;
 	menu->changeState[0] = -2;
 	menu->maxLine = 0;
@@ -3065,15 +3234,17 @@ void clearScreen(screen *tela)
 	char page1[] = "     Controles: \n As teclas usadas nesse jogo sao X, Z, as setas direcionais e a tecla ESC. \n As setas podem ser usadas para se mover no mapa e para controlar o seletor em menus; dentro de menus a seta para a esquerda possui funcao analoga a tecla X e a seta para a direita e analoga a tecla Z; ao se movimentar no mapa a tecla X abre o menue a tecla Z pega itens no chao. \n A tecla Z confirma a selecao no menu. A tecla X retorna, assim como a tecla ESC, quando for possivel retornar.";
 	addPage(&(tela->helpScroll), page1);
 	char page2[] = "     Sobre o jogo: \n Voce comeca com um vampiro de nivel 1 em uma caverna com vampiros inimigos. Voce pode derrotar os inimigos para subir de nivel e continuar explorando a caverna encontrando inimigos cada vez mais fortes e mais armados. \n A cada nivel que o jogador sobe ele ganha 3 pontos para distribuir entre seus atributos, A quantidade de pontos e mostrada na extremidade superior direita da tela, e o numero precedido por 'PTS:' \n \n Tambem e possivel pegar itens e pocoes que lhe deixam mais forte, para isso basta se posicionar em cima do item e pressinar 'Z', se vampiros inimigos passarem por cima do item, eles o pegaram automaticamente";
-	addPage(&tela->helpScroll, page2);
-
+	addPage(&(tela->helpScroll), page2);
+	char page3[] = "     Sobre mapas: \n Ao selecionar a opcao 'Continuar jogo' do menu principal, voce continua o jogo a partir do estado do jogo salvo na memoria, se e a primeira vez que joga, um mapa novo ja tera sido criado nesse ponto. \n Se ha um mapa salvo, mas nao jogou nele ainda, ele sera incializado como descrito no mapa. \n A opcao 'Novo jogo' gera um novo mapa, sobreescrevendo o antigo e apagando o estado anterior do jogo. \n Durante o jogo, no menu do mapa, existe a opcao de salvar o jogo, mas ao sair pelo menu o jogo tambem e salvo.";
+	addPage(&(tela->helpScroll), page3);
 
 
 	changeMenuState(tela, 6);
 }
 
-void drawScreen(screen* tela, map *mapa, int mode, int *configFlags)
+void drawScreen(screen* tela, map *mapa, config bits)
 {
+	ptr_vampire theWatcher = &(mapa->entities[ENTITYLISTSIZE - 2]);
 	if(CLEAR)
 		system("clear");
 	int i, j = 1, yLeft = 1, yRight = 1;
@@ -3086,10 +3257,34 @@ void drawScreen(screen* tela, map *mapa, int mode, int *configFlags)
 		}
 	}
 
-	if(mode == MOVINMAP || mode == MAPMENU || mode == BATTLING || mode == WATCHING)
+	if(bits.mode == MOVINMAP || bits.mode == MAPMENU || bits.mode == BATTLING || bits.mode == WATCHING)
 		yLeft = printVampireAt(tela, 1, yLeft, tela->columnWidth, mapa->entities[0], 1);
 
-	if(mode == BATTLING) {
+	if(bits.mode == WATCHING) {
+		char string[26];
+		door port = {};
+		short tile = mapa->mapTiles[theWatcher->y * mapa->width + theWatcher->x];
+		sprintf(string, "x:%d, y:%d. roomId:%d", theWatcher->x, theWatcher->y, (tile & 0xff00) >> 8);
+		drawLine(tela, tela->columnWidth + tela->mapWidth + 3, yRight, string);
+		yRight++;
+		for(i = 0;i < mapa->roomList[(tile & 0xff00) >> 8]._doorAmount;i++) {
+			port = mapa->doorList[ mapa->roomList[(tile & 0xff00) >> 8].doorListIDs[i] ];
+			sprintf(string, "x:%d,y:%d,p:%d,n:%d", port.x, port.y, port.prevRoom, port.nextRoom);
+			drawLine(tela, tela->columnWidth + tela->mapWidth + 3, yRight, string);
+			yRight++;
+		}
+		if((tile & 0x007f) == CLOSEDDOOR || (tile & 0x007f) == OPENDOOR) {
+			port = getDoorAtRoom(mapa, theWatcher->x, theWatcher->y, ((tile & 0xff00) >> 8));
+			sprintf(string, "state:%d,dir:%d,prev:%d", port.state, port.doorDirection, port.prevRoom);
+			drawLine(tela, tela->columnWidth + tela->mapWidth + 3, yRight, string);
+			yRight++;
+			sprintf(string, "next:%d", port.nextRoom);
+			drawLine(tela, tela->columnWidth + tela->mapWidth + 3, yRight, string);
+			yRight++;
+		}
+	}
+
+	if(bits.mode == BATTLING) {
 		vampire vamp = mapa->entities[0];
 		if(vamp.battling != -1) {
 			drawLine(tela, 1, yLeft, &(mapa->roundStrings[0][0]));
@@ -3114,7 +3309,7 @@ void drawScreen(screen* tela, map *mapa, int mode, int *configFlags)
 		}
 	}
 
-	if(mode == MOVINMAP || mode == MAPMENU || mode == BATTLING || mode == WATCHING)
+	if(bits.mode == MOVINMAP || bits.mode == MAPMENU || bits.mode == BATTLING || bits.mode == WATCHING)
 	{
 		char c;
 		for(j = 0; j < tela->shownHeight - 2;j++)
@@ -3147,30 +3342,48 @@ void drawScreen(screen* tela, map *mapa, int mode, int *configFlags)
 			if(item.state == 1 && item.y > mapa->offsetTop && item.y < mapa->offsetTop + tela->shownHeight - 2 && item.x > mapa->offsetRight && item.x < mapa->offsetRight + tela->mapWidth) {
 				tela->screenPixels[(item.y + 1 - mapa->offsetTop) * tela->shownWidth + (item.x + tela->columnWidth + 2 - mapa->offsetRight)] = item.type == 0 ? 'P' : item.type == 1 ? 'W' : 'A';
 			}
-			if(item.x == _vamp->x && item.y == _vamp->y && item.state == 1 && yRight < yLeft)
+			if((bits.mode == WATCHING && item.x == theWatcher->x && item.y == theWatcher->y && item.state == 1) || (bits.mode != BATTLING && bits.mode != WATCHING && item.x == _vamp->x && item.y == _vamp->y && item.state == 1) )
 				yRight = printItemAt(tela, tela->columnWidth + 3 + tela->mapWidth, yRight, tela->columnWidth, item);
 		}
-
-		for(i = mapa->_entitiesAmount - 1;i >= 0;i--) {
+		for(i = 1;i < mapa->_entitiesAmount;i++) {
 			_vamp = &(mapa->entities[i]);
 			if(_vamp != NULL) {
 				if(_vamp->y >= mapa->offsetTop && _vamp->y < mapa->offsetTop + tela->shownHeight - 2 && _vamp->x >= mapa->offsetRight && _vamp->x < mapa->offsetRight + tela->mapWidth)
-
 					tela->screenPixels[(_vamp->y + 1 - mapa->offsetTop) * tela->shownWidth + (_vamp->x + tela->columnWidth + 2 - mapa->offsetRight)] = _vamp->alive == 0 ? 'M' : _vamp->vampireType == 0 ? 'V' : _vamp->vampireType == 1 ? '@' : 'D';
+				if(bits.mode == WATCHING && _vamp->x == theWatcher->x && _vamp->y == theWatcher->y && i != 0) {
+					yRight = printVampireAt(tela, tela->columnWidth + 3 + tela->mapWidth, yRight, tela->columnWidth, *(_vamp), 1);
+				}
 			}
 		}
+		_vamp = &(mapa->entities[0]);
+		if(_vamp->y >= mapa->offsetTop && _vamp->y < mapa->offsetTop + tela->shownHeight - 2 && _vamp->x >= mapa->offsetRight && _vamp->x < mapa->offsetRight + tela->mapWidth)
+			tela->screenPixels[(_vamp->y + 1 - mapa->offsetTop) * tela->shownWidth + (_vamp->x + tela->columnWidth + 2 - mapa->offsetRight)] = '@';
 
-		if(mode == WATCHING)
-			drawLine(tela, (mapa->entities[ENTITYLISTSIZE - 2].y + 1 - mapa->offsetTop) * tela->shownWidth, (mapa->entities[ENTITYLISTSIZE - 2].x + tela->columnWidth - mapa->offsetRight), " ");
+		if(bits.mode == WATCHING) {
+			i = mapa->entities[ENTITYLISTSIZE - 2].y + 1 - mapa->offsetTop;
+			j = mapa->entities[ENTITYLISTSIZE - 2].x + tela->columnWidth + 2 - mapa->offsetRight;
+			if(i != 1) {
+				tela->screenPixels[(i - 1) * tela->shownWidth + j] = 0x90;
+			}
+			if(i != tela->shownHeight - 2) {
+				tela->screenPixels[(i + 1) * tela->shownWidth + j] = 0x8f;
+			}
+			if(j != tela->columnWidth + 2) {
+				tela->screenPixels[i * tela->shownWidth + j - 1] = 0x91;
+			}
+			if(j != tela->columnWidth + 2 + tela->mapWidth) {
+				tela->screenPixels[i * tela->shownWidth + j + 1] = 0x92;
+			}
+		}
 	}
 
-	if(mode == UPDATING) {
+	if(bits.mode == UPDATING) {
 		int yMiddle = tela->shownHeight / 4;
 		yMiddle = printVampireAt(tela, tela->columnWidth + 2 + (tela->mapWidth / 4), yMiddle, tela->mapWidth / 2, mapa->entities[ENTITYLISTSIZE - 1], 0);
 		tela->menuList[4].y = yMiddle + 1;
 	}
 
-	if(mode == WONSCREEN || mode == LOSTSCREEN) {
+	if(bits.mode == WONSCREEN || bits.mode == LOSTSCREEN) {
 		int yMiddle = tela->shownHeight / 4;
 		drawLine(tela, tela->columnWidth + 2 + (tela->mapWidth - 60) / 2, yMiddle, "  ________                                                  ");
 		yMiddle++;
@@ -3187,21 +3400,21 @@ void drawScreen(screen* tela, map *mapa, int mode, int *configFlags)
 		tela->menuList[5].y = yMiddle + 1;
 	}
 
-	if(mode == HOWTOPLAY) {
+	if(bits.mode == HOWTOPLAY) {
 		printScrollAt(tela, tela->helpScroll.x, tela->helpScroll.y, tela->helpScroll.width, tela->helpScroll.height, &(tela->helpScroll));
 	}
 
-	if(mode == CONFIGUR) {
-		drawLine(tela, tela->menuList[8].x + tela->menuList[8].width, tela->menuList[8].y, configFlags[0] == 0 ? "Facil" : configFlags[0] == 1 ? "Medio" : "Dificil");
+	if(bits.mode == CONFIGUR) {
+		drawLine(tela, tela->menuList[8].x + tela->menuList[8].width, tela->menuList[8].y, bits.difficulty == 0 ? "Facil" : bits.difficulty == 1 ? "Medio" : "Dificil");
 	}
 
-	if(mode == CONFIGURSCREEN) {
+	if(bits.mode == CONFIGURSCREEN) {
 		char string[35];
 		i = sprintf(string, "Tamanho atual: %d/%d", tela->width, tela->height);
 		drawLine(tela, tela->columnWidth + 2 + ( (tela->mapWidth - i) / 2), -2 + (tela->shownHeight - tela->menuList[9].height - 2) / 2, string);
 	}
 
-	if(mode == NAMING) {
+	if(bits.mode == NAMING) {
 		char string[] = "Digite seu nome (max 20 digitos):";
 		drawLine(tela, tela->columnWidth + 2 + ( (tela->mapWidth - sizeof(string)) / 2), -4 + (tela->shownHeight / 2 ), string);
 		drawBox(tela, tela->columnWidth + 2 + ( (tela->mapWidth - sizeof(mapa->entities[0].name)) / 2), -3 + (tela->shownHeight / 2), 22, 3);
@@ -3209,10 +3422,6 @@ void drawScreen(screen* tela, map *mapa, int mode, int *configFlags)
 		if(j < 20)
 		drawLine(tela, tela->columnWidth + 3 + ( (tela->mapWidth - sizeof(mapa->entities[0].name) ) / 2) + j, -2 + (tela->shownHeight / 2), "_");
 		drawLine(tela, tela->columnWidth + 3 + ( (tela->mapWidth - sizeof(mapa->entities[0].name) ) / 2), (tela->shownHeight / 2), "Enter para continuar");
-	}
-
-	if(mode == WATCHING) {
-
 	}
 
 	arrowMenu *menu;
@@ -3322,19 +3531,19 @@ void showScreen(screen *tela)
 						break;
 
 					case 0x0f:
-						printf("▲");
+						printf("\x1B[36m▲\x1B[0m");
 						break;
 
 					case 0x10:
-						printf("▼");
+						printf("\x1B[36m▼\x1B[0m");
 						break;
 
 					case 0x11:
-						printf("▶");
+						printf("\x1B[36m▶\x1B[0m");
 						break;
 
 					case 0x12:
-						printf("◀");
+						printf("\x1B[36m◀\x1B[0m");
 						break;
 				}
 				continue;
@@ -3368,13 +3577,22 @@ void showScreen(screen *tela)
 void updateOffsets(map *mapa, screen *tela, int vampireToCenter)
 {
 	vampire player = mapa->entities[vampireToCenter];
-	mapa->offsetRight = player.x - (tela->mapWidth/2);
-	mapa->offsetTop = player.y - (tela->shownHeight/2) - 1;
-	if(mapa->offsetRight < 0) mapa->offsetRight = 0;
-	else if(mapa->offsetRight > mapa->width - tela->mapWidth) mapa->offsetRight = mapa->width - tela->mapWidth;
+	
+	if(mapa->width <= tela->mapWidth)
+		mapa->offsetRight = 0;
+	else {
+		mapa->offsetRight = player.x - (tela->mapWidth/2);
+		if(mapa->offsetRight < 0) mapa->offsetRight = 0;
+		else if(mapa->offsetRight > mapa->width - tela->mapWidth) mapa->offsetRight = mapa->width - tela->mapWidth;
+	}
 
-	if(mapa->offsetTop < 0) mapa->offsetTop = 0;
-	else if(mapa->offsetTop > mapa->height - tela->shownHeight + 2) mapa->offsetTop = mapa->height - tela->shownHeight + 2;
+	if(mapa->height <= tela->shownHeight - 2)
+		mapa->offsetTop = 0;
+	else {
+		mapa->offsetTop = player.y - (tela->shownHeight/2) - 1;
+		if(mapa->offsetTop < 0) mapa->offsetTop = 0;
+		else if(mapa->offsetTop > mapa->height - tela->shownHeight + 2) mapa->offsetTop = mapa->height - tela->shownHeight + 2;
+	}
 }
 
 int drawLine(screen *tela, int x, int y, char *string)
@@ -3404,31 +3622,6 @@ void drawBox(screen *tela, int x, int y, int width, int height)
 		tela->screenPixels[ y * tela->shownWidth + x + ((width - 1) * i) ] = 0x80 + i;
 		tela->screenPixels[ (y + (height - 1)) * tela->shownWidth + x + ((width - 1) * i) ] = 0x82 + i;
 	}
-	/* 
-
-	for(i = 0;i < 2;i++)
-	{
-		memset((tela->screenPixels + (i * tela->shownWidth * (tela->shownHeight - 1)) + 1), 0x84, tela->shownWidth - 2);
-		for(j = 0; j < tela->shownHeight - 1;j++)
-		{
-			(tela->screenPixels)[(j) * tela->shownWidth + (i * (tela->shownWidth - 1))] = 0x85;
-		}
-	}
-
-	for(i = 0;i < 2;i++)
-	{
-		for(j = 1; j < tela->shownHeight - 1;j++)
-		{
-			(tela->screenPixels)[(j * tela->shownWidth) + (i * tela->mapWidth) + (tela->columnWidth) + 1 + i] = 0x85;
-		}
-		(tela->screenPixels)[0 + (i * tela->mapWidth) + tela->columnWidth + 1 + i] = 0x87;
-		(tela->screenPixels)[(tela->shownWidth * (tela->shownHeight - 1)) + (i * tela->mapWidth) + tela->columnWidth + 1 + i] = 0x86;
-	}
-
-	(tela->screenPixels)[0] = 0x80;
-	(tela->screenPixels)[tela->shownWidth - 1] = 0x81;
-	(tela->screenPixels)[(tela->shownHeight - 1) * tela->shownWidth] = 0x82;
-	(tela->screenPixels)[(tela->shownHeight * tela->shownWidth) - 1] = 0x83; */
 }
 
 int printVampireAt(screen *tela, int x, int y, int width, vampire vamp, int printItems)
@@ -3643,7 +3836,7 @@ int printItemAt(screen *tela, int x, int y, int width, usable item)
 
 int printMenuAt(screen *tela, int x, int y, int width, int height, arrowMenu menu)
 {
-	int i = 0, drawingLine = menu.lineOffset;
+	int i = 0, drawingLine = 0;
 	int j = 0;
 	for(;drawingLine < menu.maxLine && i < height;drawingLine++) {
 		if(menu.lineState[drawingLine] == 2) {
@@ -3793,12 +3986,12 @@ void startVampire(ptr_vampire vamp)
 	vamp->nextLevel = vamp->level * 2;
 	vamp->atkDamage = BASEATKDAMAGE;
 	vamp->spentPoints = 3;
-	vamp->x = 30;
-	vamp->y = 30;
+	vamp->x = MAPWIDTH / 2;
+	vamp->y = MAPHEIGHT / 2;
 	vamp->xMotion = 0;
 	vamp->yMotion = 0;
 	vamp->functionAI = randomDirection;
-	if(vamp->vampireType == 0 && !vamp->named) {
+	if(vamp->vampireType != 1 && !vamp->named) {
 		clearArray(vamp->name, 20,  1);
 		nameVampire(vamp);
 	}
@@ -4016,6 +4209,17 @@ void checkAndCreateItem(map* mapa, int doALL)
 	}
 }
 
+void distributeItemsVampsNMap(map *mapa)
+{
+	checkAndCreateItem(mapa, 1);
+	int i = 1;
+	for(;i < mapa->_entitiesAmount;i++) {
+		if(mapa->entities[i].level > 1) {
+			giveRandomItems(&(mapa->entities[i]));
+		}
+	}
+}
+
 int getPotionHeal(ptr_vampire vamp)
 {
 	if(vamp->itemListIDS[0] == -1)
@@ -4108,6 +4312,10 @@ void pickItem(map *mapa, ptr_vampire vamp)
 					mapa->_usablesAmount--;
 				} else {
 					usable holdItem = getItemAt(vamp->itemListIDS[ item.type ]);
+					vamp->atkDamage -= holdItem.damage;
+					vamp->maxHP -= holdItem.hp;
+					vamp->currentHP -= holdItem.hp;
+					vamp->lifeSteal -= holdItem.lifeSteal;
 					holdItem.x = item.x;
 					holdItem.y = item.y;
 					holdItem.state = 1;
@@ -4125,6 +4333,29 @@ void pickItem(map *mapa, ptr_vampire vamp)
 			item = mapa->itemList[i];
 			return;
 		}
+	}
+}
+
+void giveRandomItems(ptr_vampire vamp)
+{
+	int weights[3] = {10, 8, 9};
+	usable item;
+	int i = 0, type = -1;
+	while(i < 3 && (rand() % 30 <= vamp->level)) {
+		type = randomWeightedAvarage(3, weights);
+		item = getRandomItemOfType(type);
+		if(type == 0) {
+			vamp->itemListIDS[0] = item.id;
+			vamp->potAmount = rand() % 4;
+		} else {
+			vamp->itemListIDS[type] = item.id;
+			vamp->atkDamage += item.damage;
+			vamp->maxHP += item.hp;
+			vamp->currentHP += item.hp;
+			vamp->lifeSteal += item.lifeSteal;
+		}
+		weights[type] = 0;
+		i++;
 	}
 }
 
@@ -4161,12 +4392,13 @@ usable getItemAt(int index)
 	static int SIZE = 0;
 	static usable *ITEMLIST = NULL;
 
-	if(index == 0xffffffff) {
+	if(index == 0xff00ff00) {
 		readItemList(&ITEMLIST, &SIZE);
 		index = 0;
-	} else if(index == 0xfffffffe) {
+	} else if(index == 0xff00ff01) {
 		free(ITEMLIST);
 		SIZE = 0;
+		ITEMLIST = NULL;
 		usable kappa;
 		return kappa;
 	}
