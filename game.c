@@ -17,6 +17,10 @@ typedef struct {
     short canRotate;
 } object;
 
+void toLowerPos(char* mapa, object* pecaFantasma);
+
+void toBottom(char* mapa, object* peca);
+
 void copyObject(object* peca, object peca2);
 
 void turnPiece(char* mapa, object* peca, int direction);
@@ -27,9 +31,11 @@ int moveToXY(char* mapa, object* peca, int x, int y);
 
 void clearArray(char* array, int length, int fill);
 
+void verifyLines(char* mapa, object* peca);
+
 void doGameTick(char* mapa, object* peca);
 
-void updateScreen(char* mapa);
+void updateScreen(char* mapa, object pecaFantasma);
 
 object randomObject(char* mapa, int x, int y, int count);
 
@@ -59,6 +65,8 @@ char getch();
 
 int kbhit();
 
+int score = 0;
+
 int main() {
     srand(time(NULL));
     system("clear");
@@ -74,7 +82,9 @@ int main() {
     object peca = randomObject(mapa, -1, 0, 0);
 
     createObject(mapa, &peca);
-    updateScreen(mapa);
+    object pecaFantasma = peca;
+    toLowerPos(mapa, &pecaFantasma);
+    updateScreen(mapa, pecaFantasma);
     clock_t delta = 0;
     clock_t lastTime = clock(), curTime = 0;
     
@@ -93,23 +103,45 @@ int main() {
                 moveToXY(mapa, &peca, -1, 0);
             else if(in == 'd' || in == 'D')
                 moveToXY(mapa, &peca, +1, 0);
-            else if(in == 's' || in == 'S')
-                moveToXY(mapa, &peca, 0, +1);
+            else if(in == 's' || in == 'S') {
+                doGameTick(mapa, &peca);
+                delta /= 3;
+            }
             else if(in == 'w' || in == 'W')
                 turnPiece(mapa, &peca, 1);
-            updateScreen(mapa);
+            else if(in == ' ') {
+                if(moveToXY(mapa, &peca, 0, +1)) {
+                    toBottom(mapa, &peca);
+                    delta = 0;
+                }
+            }
+            pecaFantasma = peca;
+            toLowerPos(mapa, &pecaFantasma);
+            updateScreen(mapa, pecaFantasma);
         }
 
         if(delta >= delay) {
             delta -= delay;
             doGameTick(mapa, &peca);
-            updateScreen(mapa);
+            pecaFantasma = peca;
+            toLowerPos(mapa, &pecaFantasma);
+            updateScreen(mapa, pecaFantasma);
         }
 
         lastTime = curTime;
     }
     free(mapa);
     return 0;
+}
+
+void toLowerPos(char* mapa, object* pecaFantasma) {
+    while(canGoXY(mapa, pecaFantasma, 0, +1)) {
+        pecaFantasma->y++;
+    }
+}
+
+void toBottom(char* mapa, object* peca) {
+    while(moveToXY(mapa, peca, 0, +1)) {}
 }
 
 void copyObject(object* peca, object peca2) {
@@ -172,8 +204,31 @@ void clearArray(char* array, int length, int fill) {
 
 void doGameTick(char* mapa, object* peca) {
     if( !moveToXY(mapa, peca, 0, +1) ) {
+        verifyLines(mapa, peca);
         *peca = randomObject(mapa, -1, 0, 0);
         createObject(mapa, peca);
+    }
+}
+
+void verifyLines(char* mapa, object* peca) {
+    int i = HEIGHT - 1, j = 0, k = 0, scoreMultiplier = 1;
+    for(;i >= 0; i--) {
+        for(j = 0, k = 0;j < WIDTH;j++) {
+            k += mapa[i * WIDTH + j] == '@';
+        }
+        if(k == WIDTH) {
+            for(j = 0;j < WIDTH;j++) {
+                mapa[i * WIDTH + j] = ' ';
+            }
+            for(j = i - 1; j >= 0; j--) {
+                for(k = 0; k < WIDTH; k++) {
+                    mapa[(j + 1) * WIDTH + k] = mapa[j * WIDTH + k];
+                }
+            }
+            score += 10 * scoreMultiplier;
+            scoreMultiplier *= 2;
+            i++;
+        }
     }
 }
 
@@ -200,20 +255,32 @@ void eraseObject(char* mapa, object* peca) {
     }
 }
 
-void updateScreen(char* mapa) {
+void updateScreen(char* mapa, object pecaFantasma) {
     system("clear");
     int i = 0;
     for(;i < WIDTH + 2;i++) {
         putchar('#');
     }
-    putchar('\n');
+    printf("  Score: %d\n", score);
     for(i = 0;i < HEIGHT; i++) {
         putchar('#');
         printf("%.*s", WIDTH, mapa + (i * WIDTH));
         printf("#\n");
     }
     for(i = 0;i < WIDTH + 2;i++) {
+        char a = 0;
+        if(i - 1 >= 0 && i - 1 < WIDTH) {
+            int j = 0;
+            for(;j < pecaFantasma.partAmt;j++) {
+                if(pecaFantasma.x + pecaFantasma.parts[j][0] == i - 1) {
+                    printf("\x1B[7m");
+                    a = 1;
+                    break;
+                }
+            }
+        }
         putchar('#');
+        if(a) printf("\x1B[0m");
     }
 }
 
@@ -223,10 +290,10 @@ object randomObject(char* mapa, int x, int y, int count) {
         y = 0;
     }
 
-    int r = rand() % 4;
+    int r = rand() % 7;
     object peca = {.x = cX(x), .y = cY(y), .partAmt = 3, .parts = {}};
     if(count >= 10000) {
-        printf("deu merda na random object");
+        printf("Se fodeu");
         exit(1);
     }
     switch(r) {
@@ -276,6 +343,44 @@ object randomObject(char* mapa, int x, int y, int count) {
             peca.parts[2][1] = 0;
             peca.parts[3][0] = 0;
             peca.parts[3][1] = +1;
+            peca.canRotate = 1;
+            break;
+        case 4:
+            peca.partAmt = 4;
+            peca.parts[0][0] = 0;
+            peca.parts[0][1] = 0;
+            peca.parts[1][0] = 0;
+            peca.parts[1][1] = +1;
+            peca.parts[2][0] = +1;
+            peca.parts[2][1] = 0;
+            peca.parts[3][0] = +2;
+            peca.parts[3][1] = 0;
+            peca.canRotate = 1;
+            break;
+        case 5:
+            peca.partAmt = 4;
+            peca.parts[0][0] = 0;
+            peca.parts[0][1] = 0;
+            peca.parts[1][0] = 0;
+            peca.parts[1][1] = +1;
+            peca.parts[2][0] = -1;
+            peca.parts[2][1] = 0;
+            peca.parts[3][0] = -2;
+            peca.parts[3][1] = 0;
+            peca.canRotate = 1;
+            break;
+        case 6:
+            peca.partAmt = 5;
+            peca.parts[0][0] = 0;
+            peca.parts[0][1] = 0;
+            peca.parts[1][0] = -1;
+            peca.parts[1][1] = 0;
+            peca.parts[2][0] = -2;
+            peca.parts[2][1] = 0;
+            peca.parts[3][0] = +1;
+            peca.parts[3][1] = 0;
+            peca.parts[4][0] = +2;
+            peca.parts[4][1] = 0;
             peca.canRotate = 1;
             break;
     }
