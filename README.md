@@ -23,3 +23,6 @@ Então para jogar basta rodar com
 ./jogo
 ```
 
+![Jogador andando pelo mapa](https://github.com/delanoerhardt/Trab-Apc/blob/master/foto1.png)
+![Batalha contra um vampiro](https://github.com/delanoerhardt/Trab-Apc/blob/master/foto2.png)
+![Localizando e vendo os detalhes do Drácula](https://github.com/delanoerhardt/Trab-Apc/blob/master/foto3.png)
